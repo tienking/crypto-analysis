@@ -1,31 +1,21 @@
 from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from config import REFRESH_MINUTES
-from database import ensure_indexes, seed_defaults, upsert_articles, get_enabled_feeds
-from rss import fetch_all
+
+from analysis.binance import BinanceClient
 from api import router
-
-scheduler = AsyncIOScheduler()
-
-
-async def refresh_job():
-    feeds = await get_enabled_feeds()
-    items = await fetch_all(feeds)
-    inserted = await upsert_articles(items)
-    print(f"[refresh] feeds={len(feeds)} fetched={len(items)} inserted={inserted}")
+from database import seed_defaults
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await ensure_indexes()
     await seed_defaults()
-    await refresh_job()  # initial fill on startup
-    scheduler.add_job(refresh_job, "interval", minutes=REFRESH_MINUTES, id="rss_refresh")
-    scheduler.start()
-    yield
-    scheduler.shutdown(wait=False)
+    # One shared HTTP client for Binance market data (public endpoints, no key).
+    async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "crypto-analysis/1.0"}) as http:
+        app.state.binance = BinanceClient(http)
+        yield
 
 
-app = FastAPI(title="Crypto News API", lifespan=lifespan)
+app = FastAPI(title="Crypto Analysis API", lifespan=lifespan)
 app.include_router(router)

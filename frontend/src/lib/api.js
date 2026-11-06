@@ -1,34 +1,45 @@
 const BASE = "/api/crypto-news";
 
-export async function fetchArticles({ page = 1, limit = 24, source = "", q = "" } = {}) {
-  const params = new URLSearchParams({ page, limit });
-  if (source) params.set("source", source);
-  if (q) params.set("q", q);
-  const res = await fetch(`${BASE}/articles?${params}`);
-  if (!res.ok) throw new Error("Failed to load articles");
+// ── Coin analysis ──────────────────────────────────────────────────────────────
+
+export async function fetchAnalysisConfig() {
+  const res = await fetch(`${BASE}/analysis/config`);
+  if (!res.ok) throw new Error("Không tải được cấu hình");
   return res.json();
 }
 
-export async function fetchArticle(id) {
-  const res = await fetch(`${BASE}/article/${id}`);
-  if (!res.ok) throw new Error("Article not found");
-  return res.json();
+/** Score one coin. Throws an Error whose message is ready to show (Vietnamese). */
+export async function analyzeCoin({ symbol, timeframe, thresholds, weights }) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, timeframe, thresholds, weights }),
+    });
+  } catch {
+    throw new Error("Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof data.detail === "string" ? data.detail
+        : Array.isArray(data.detail) ? "Giá trị ngưỡng hoặc trọng số không hợp lệ: " + data.detail.map(e => e.loc.slice(-1)[0]).join(", ")
+        : `Lỗi máy chủ (${res.status}).`
+    );
+  }
+  return data;
 }
 
-export async function fetchSources() {
-  const res = await fetch(`${BASE}/sources`);
-  if (!res.ok) return [];
-  return res.json();
-}
-
-export async function chat(message, history) {
+/** `analysis` = the coin on screen ({symbol, timeframe, thresholds, weights}); the server recomputes it as context. */
+export async function chat(message, history, analysis) {
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, analysis: analysis || null }),
   });
   if (!res.ok) throw new Error("Chat request failed");
-  return res.json(); // { reply }
+  return res.json(); // { reply, provider }
 }
 
 export async function fetchCoins() {
@@ -67,18 +78,6 @@ export async function adminSaveCoins(token, items) {
   return res.json();
 }
 
-export async function adminGetFeeds(token) {
-  const res = await fetch(`${BASE}/admin/feeds`, { headers: authH(token) });
-  if (!res.ok) throw new Error("Failed");
-  return res.json();
-}
-
-export async function adminSaveFeeds(token, items) {
-  const res = await fetch(`${BASE}/admin/feeds`, { method: "PUT", headers: authH(token), body: JSON.stringify({ items }) });
-  if (!res.ok) throw new Error("Save failed");
-  return res.json();
-}
-
 export async function adminGetAi(token) {
   const res = await fetch(`${BASE}/admin/ai-settings`, { headers: authH(token) });
   if (!res.ok) throw new Error("Failed");
@@ -98,15 +97,4 @@ export async function adminChangePassword(token, current_password, new_password)
     throw new Error(d.detail || "Change failed");
   }
   return res.json();
-}
-
-// "3h ago", "2d ago", etc.
-export function timeAgo(iso) {
-  if (!iso) return "";
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

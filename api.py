@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Query, HTTPException, Depends, Request
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel, Field
+from typing import List, Dict, Literal, Optional
 import time
-from database import (list_articles, get_article, list_sources, upsert_articles, get_recent_articles,
-                      get_coins, set_coins, get_feeds, set_feeds, get_admin, set_admin_password,
+from database import (get_coins, set_coins, get_admin, set_admin_password,
                       get_ai_settings, set_ai_settings)
-from rss import fetch_all
 from ai import ai_chat
 from auth import create_token, verify_admin, check_password, hash_password
+from analysis.binance import SymbolNotFound, UpstreamError
+from analysis.config import CRITERIA_META, THRESHOLD_LABELS, TIMEFRAMES, Thresholds, Weights
+from analysis.service import analyze
 
 router = APIRouter()
 
@@ -16,57 +17,109 @@ router = APIRouter()
 async def health():
     return {"status": "ok", "service": "crypto-news"}
 
-@router.get("/api/crypto-news/articles")
-async def articles(
-    page: int = Query(1, ge=1),
-    limit: int = Query(24, ge=1, le=60),
-    source: str | None = None,
-    q: str | None = None,
-):
-    return await list_articles(page=page, limit=limit, source=source, q=q)
 
-@router.get("/api/crypto-news/article/{article_id}")
-async def article(article_id: str):
-    doc = await get_article(article_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Article not found")
-    return doc
+# ── Coin analysis (7 weighted criteria on Binance data) ────────────────────────
 
-@router.get("/api/crypto-news/sources")
-async def sources():
-    return await list_sources()
+Timeframe = Literal["15m", "1h", "4h", "1d"]
 
-@router.post("/api/crypto-news/refresh")
-async def refresh():
-    """Manually trigger an RSS refresh."""
-    items = await fetch_all()
-    inserted = await upsert_articles(items)
-    return {"fetched": len(items), "inserted": inserted}
+class AnalyzeRequest(BaseModel):
+    symbol: str = Field(..., min_length=2, max_length=20)
+    timeframe: Timeframe = "4h"
+    thresholds: Thresholds = Field(default_factory=Thresholds)
+    weights: Weights = Field(default_factory=Weights)
+
+# Per-IP request budget for the public endpoints that call Binance (in-memory, resets on
+# restart). Each analysis is up to 5 Binance requests; this keeps one visitor from
+# burning the server's Binance rate limit.
+_ANALYSIS_LIMIT = 30          # requests
+_ANALYSIS_WINDOW = 60         # seconds
+_analysis_hits: dict = {}     # ip -> [timestamps]
+
+def _check_analysis_rate(ip: str):
+    now = time.time()
+    if len(_analysis_hits) > 10000:
+        for k in [k for k, v in _analysis_hits.items() if not v or v[-1] < now - _ANALYSIS_WINDOW]:
+            _analysis_hits.pop(k, None)
+    hits = [t for t in _analysis_hits.get(ip, []) if t > now - _ANALYSIS_WINDOW]
+    if len(hits) >= _ANALYSIS_LIMIT:
+        raise HTTPException(status_code=429, detail="Bạn phân tích quá nhanh. Đợi một phút rồi thử lại.")
+    hits.append(now)
+    _analysis_hits[ip] = hits
+
+async def _run_analysis(request: Request, body: AnalyzeRequest) -> dict:
+    try:
+        return await analyze(request.app.state.binance, body.symbol, body.timeframe, body.thresholds, body.weights)
+    except SymbolNotFound as e:
+        raise HTTPException(404, f"Không tìm thấy cặp {e} trên Binance. Kiểm tra lại mã coin.") from e
+    except UpstreamError as e:
+        raise HTTPException(502, "Không kết nối được Binance. Thử lại sau ít phút.") from e
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+@router.get("/api/crypto-news/analysis/config")
+async def analysis_config():
+    return {
+        "timeframes": TIMEFRAMES,
+        "thresholds": Thresholds().model_dump(),
+        "threshold_labels": THRESHOLD_LABELS,
+        "weights": Weights().model_dump(),
+        "criteria": CRITERIA_META,
+    }
+
+@router.post("/api/crypto-news/analysis")
+async def analysis(body: AnalyzeRequest, request: Request):
+    _check_analysis_rate(_client_ip(request))
+    return await _run_analysis(request, body)
 
 
-# ── Chatbot (Grok / xAI) ────────────────────────────────────────────────────────
+# ── Chatbot (Grok / Gemini), grounded in the analysis the visitor is looking at ─
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=2000)
     history: Optional[List[Dict[str, str]]] = None
+    # The analysis on screen. The server recomputes it (cached 15s) rather than trusting
+    # numbers sent by the browser.
+    analysis: Optional[AnalyzeRequest] = None
 
 SYSTEM_PROMPT = (
-    "You are the AI assistant for 'Crypto News', a cryptocurrency news aggregator. "
-    "Help users understand crypto markets, projects, and the latest news. Be concise, "
-    "accurate, and neutral — never give financial advice; add a brief risk caveat when "
-    "users ask whether to buy/sell. Reply in the user's language.\n\n"
-    "Below are the most recent headlines from the site for context. Use them when the user "
-    "asks about current/latest news; otherwise answer from general crypto knowledge.\n"
+    "You are the AI assistant for 'Crypto Analysis', a site that scores a coin's trend from "
+    "-100 to +100 with 7 weighted technical criteria on Binance data: higher-timeframe "
+    "agreement, EMA trend, price structure, momentum (RSI + MACD), volume confirmation, "
+    "derivatives (open interest + funding) and BTC context. An ADX below the threshold means "
+    "'ranging' whatever the score. Explain the analysis below when the user asks about it, and "
+    "answer general crypto questions from your own knowledge. Be concise and neutral. Never "
+    "give financial advice; when asked whether to buy or sell, explain what the indicators say "
+    "and add a brief risk caveat. Reply in the user's language.\n"
 )
 
-@router.post("/api/crypto-news/chat")
-async def chat(req: ChatRequest):
-    recent = await get_recent_articles(30)
-    context = "\n".join(
-        f"- [{a.get('source','')}] {a.get('title','')} ({a.get('published','')}) — {a.get('summary','')}"
-        for a in recent
+def _analysis_context(a: dict) -> str:
+    i = a["indicators"]
+    lines = [
+        f"Coin: {a['symbol']} · timeframe {a['timeframe']} (higher timeframe {a['higher_timeframe']}) · data: Binance {a['source']}",
+        f"Price {a['price']} ({a['price_change_pct']:+.2f}% over {a['thresholds']['vol_lookback']} candles)",
+        f"Score {a['score']:+.1f} / 100 · verdict: {a['verdict']['title']} — {a['verdict']['note']}",
+        f"Criteria: {a['counts']['bull']} bullish, {a['counts']['bear']} bearish, {a['counts']['neutral']} neutral, {a['counts']['na']} no data",
+    ]
+    for c in a["criteria"]:
+        sig = "no data" if c["score"] is None else f"signal {c['score']:+g}, {c['points']:+.1f} pts"
+        lines.append(f"- {c['name']} (weight {c['weight']:g}): {sig}. Rule: {c['rule']}. Now: {c['detail']}")
+    lines.append(
+        f"Indicators: RSI {i['rsi']}, ADX {i['adx']}, MACD hist {i['macd_hist']}, EMA fast {i['ema_fast']}, "
+        f"EMA slow {i['ema_slow']}, funding {i['funding_pct']}%/8h, OI change {i['oi_change_pct']}%"
     )
-    system = SYSTEM_PROMPT + "\n=== LATEST HEADLINES ===\n" + context
+    lines += [f"Warning: {w}" for w in a["warnings"]]
+    return "\n".join(lines)
+
+@router.post("/api/crypto-news/chat")
+async def chat(req: ChatRequest, request: Request):
+    system = SYSTEM_PROMPT
+    if req.analysis:
+        try:
+            _check_analysis_rate(_client_ip(request))
+            a = await _run_analysis(request, req.analysis)
+            system += "\n=== ANALYSIS ON SCREEN ===\n" + _analysis_context(a)
+        except HTTPException as e:
+            system += f"\n(The analysis for {req.analysis.symbol} could not be loaded: {e.detail})"
     conversation = [
         {"role": ("assistant" if m.get("role") == "assistant" else "user"), "content": m.get("content", "")}
         for m in (req.history or [])[-8:]
@@ -77,7 +130,7 @@ async def chat(req: ChatRequest):
         return {"reply": reply, "provider": provider}
     except Exception as e:
         print(f"[chat] error: {e}")
-        return {"reply": "Sorry, the assistant is unavailable right now. Please try again.", "provider": None}
+        return {"reply": "Xin lỗi, trợ lý AI đang tạm thời không phản hồi. Bạn thử lại sau nhé.", "provider": None}
 
 
 # ── Public: chart coins ─────────────────────────────────────────────────────────
@@ -97,16 +150,8 @@ class CoinItem(BaseModel):
     label: str
     symbol: str
 
-class FeedItem(BaseModel):
-    name: str
-    url: str
-    enabled: bool = True
-
 class CoinsUpdate(BaseModel):
     items: List[CoinItem]
-
-class FeedsUpdate(BaseModel):
-    items: List[FeedItem]
 
 # Login rate limiting (in-memory, per client IP, resets on restart).
 _login_attempts: dict = {}  # ip -> {"count": int, "locked_until": float}
@@ -159,20 +204,6 @@ async def admin_get_coins(_: str = Depends(verify_admin)):
 async def admin_set_coins(data: CoinsUpdate, _: str = Depends(verify_admin)):
     await set_coins([c.model_dump() for c in data.items])
     return {"ok": True}
-
-@router.get("/api/crypto-news/admin/feeds")
-async def admin_get_feeds(_: str = Depends(verify_admin)):
-    return await get_feeds()
-
-@router.put("/api/crypto-news/admin/feeds")
-async def admin_set_feeds(data: FeedsUpdate, _: str = Depends(verify_admin)):
-    feeds = [f.model_dump() for f in data.items]
-    await set_feeds(feeds)
-    # fetch immediately with the enabled feeds only
-    enabled = [f for f in feeds if f.get("enabled", True)]
-    items = await fetch_all(enabled)
-    inserted = await upsert_articles(items)
-    return {"ok": True, "fetched": len(items), "inserted": inserted}
 
 
 class AISettingsUpdate(BaseModel):

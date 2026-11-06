@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { adminLogin, adminGetCoins, adminSaveCoins, adminGetFeeds, adminSaveFeeds, adminGetAi, adminSaveAi, adminChangePassword } from "./lib/api";
+import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword } from "./lib/api";
 
-const NEWS_URL = "/projects/crypto-news/";
+const SITE_URL = "/projects/crypto-news/";
 
 function getToken() {
   const t = localStorage.getItem("cn_admin_token");
@@ -40,7 +40,7 @@ function Login({ onLogin }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
       <div style={{ width: 340, background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 16, padding: "32px 28px" }}>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 8 }}>CRYPTO NEWS · ADMIN</p>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 8 }}>CRYPTO ANALYSIS · ADMIN</p>
         <h1 style={{ fontSize: 21, fontWeight: 800, marginBottom: 22 }}>Sign in</h1>
         <form onSubmit={submit}>
           <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 5 }}>Username</label>
@@ -53,7 +53,7 @@ function Login({ onLogin }) {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <a href={NEWS_URL} style={{ display: "inline-block", marginTop: 16, fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>← Back to news</a>
+        <a href={SITE_URL} style={{ display: "inline-block", marginTop: 16, fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>← Back to site</a>
       </div>
     </div>
   );
@@ -90,58 +90,13 @@ function ListEditor({ title, fields, items, setItems }) {
   );
 }
 
-// ── Feeds editor (with enable/disable toggle per source) ─────────────────────────
-
-function FeedsEditor({ feeds, setFeeds }) {
-  const update = (i, key, val) => setFeeds(feeds.map((f, idx) => idx === i ? { ...f, [key]: val } : f));
-  const toggle = (i) => setFeeds(feeds.map((f, idx) => idx === i ? { ...f, enabled: f.enabled === false ? true : false } : f));
-  const remove = (i) => setFeeds(feeds.filter((_, idx) => idx !== i));
-  const add = () => setFeeds([...feeds, { name: "", url: "", enabled: true }]);
-
-  return (
-    <div>
-      <h2 style={{ fontSize: 13, fontFamily: "var(--font-mono)", color: "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 12 }}>ON/OFF · NAME · RSS URL</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {feeds.map((f, i) => {
-          const on = f.enabled !== false;
-          return (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "auto 1fr 2fr auto", gap: 8, alignItems: "center", opacity: on ? 1 : 0.5 }}>
-              <button onClick={() => toggle(i)} title={on ? "Enabled — click to disable" : "Disabled — click to enable"}
-                style={{
-                  width: 46, height: 30, borderRadius: 15, cursor: "pointer", position: "relative",
-                  border: `1px solid ${on ? "var(--accent-border)" : "var(--border)"}`,
-                  background: on ? "var(--accent-dim)" : "var(--bg)", transition: "all .15s",
-                }}>
-                <span style={{
-                  position: "absolute", top: 3, left: on ? 19 : 3, width: 22, height: 22, borderRadius: "50%",
-                  background: on ? "var(--accent)" : "var(--text-muted)", transition: "left .15s",
-                }} />
-              </button>
-              <input value={f.name || ""} placeholder="CoinDesk" onChange={e => update(i, "name", e.target.value)} style={inp} />
-              <input value={f.url || ""} placeholder="https://…/rss" onChange={e => update(i, "url", e.target.value)} style={{ ...inp, fontFamily: "var(--font-mono)" }} />
-              <button onClick={() => remove(i)} title="Remove"
-                style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", cursor: "pointer", fontSize: 13 }}>✕</button>
-            </div>
-          );
-        })}
-      </div>
-      <button onClick={add}
-        style={{ marginTop: 10, width: "100%", padding: 9, borderRadius: 9, border: "1px dashed var(--border)", background: "none", color: "var(--text-muted)", fontSize: 13, cursor: "pointer", fontFamily: "var(--font-display)" }}>
-        + Add
-      </button>
-    </div>
-  );
-}
-
 // ── Dashboard ────────────────────────────────────────────────────────────────────
 
 function Dashboard({ token, onLogout }) {
   const [coins, setCoins] = useState([]);
-  const [feeds, setFeeds] = useState([]);
   const [ai, setAi] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingCoins, setSavingCoins] = useState(false);
-  const [savingFeeds, setSavingFeeds] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
   const [pw, setPw] = useState({ current: "", next: "" });
   const [savingPw, setSavingPw] = useState(false);
@@ -151,8 +106,8 @@ function Dashboard({ token, onLogout }) {
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(""), 3000); };
 
   useEffect(() => {
-    Promise.all([adminGetCoins(token), adminGetFeeds(token), adminGetAi(token)])
-      .then(([c, f, a]) => { setCoins(c); setFeeds(f); setAi(a); setLoading(false); })
+    Promise.all([adminGetCoins(token), adminGetAi(token)])
+      .then(([c, a]) => { setCoins(c); setAi(a); setLoading(false); })
       .catch(() => { localStorage.removeItem("cn_admin_token"); onLogout(); });
   }, [token]);
 
@@ -168,15 +123,6 @@ function Dashboard({ token, onLogout }) {
     try { await adminSaveCoins(token, coins.filter(c => c.label && c.symbol)); flash("✓ Coins saved"); }
     catch { flash("Failed to save coins"); }
     setSavingCoins(false);
-  };
-
-  const saveFeeds = async () => {
-    setSavingFeeds(true);
-    try {
-      const res = await adminSaveFeeds(token, feeds.filter(f => f.name && f.url));
-      flash(`✓ Feeds saved · fetched ${res.fetched}, +${res.inserted} new`);
-    } catch { flash("Failed to save feeds"); }
-    setSavingFeeds(false);
   };
 
   const changePassword = async () => {
@@ -204,11 +150,11 @@ function Dashboard({ token, onLogout }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <p style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", letterSpacing: "0.1em" }}>CN ADMIN</p>
             <span style={{ color: "var(--border)" }}>·</span>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>Crypto News</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>Crypto Analysis</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {msg && <span style={{ fontSize: 12, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>{msg}</span>}
-            <a href={NEWS_URL} style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>View site →</a>
+            <a href={SITE_URL} style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>View site →</a>
             <button onClick={onLogout} style={{ fontSize: 12, color: "var(--text-muted)", background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-display)" }}>Sign out</button>
           </div>
         </div>
@@ -271,19 +217,6 @@ function Dashboard({ token, onLogout }) {
               { key: "label", placeholder: "BTCUSDT", w: "1fr" },
               { key: "symbol", placeholder: "MEXC:BTCUSDT", w: "1.4fr", mono: true },
             ]} />
-        </section>
-
-        {/* Feeds */}
-        <section>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <h1 style={{ fontSize: 17, fontWeight: 700 }}>News sources (RSS)</h1>
-            <button onClick={saveFeeds} disabled={savingFeeds}
-              style={{ padding: "8px 20px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#000", fontSize: 13, fontWeight: 700, cursor: savingFeeds ? "default" : "pointer", opacity: savingFeeds ? 0.7 : 1 }}>
-              {savingFeeds ? "Saving..." : "Save"}
-            </button>
-          </div>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>Toggle a source off to hide its old articles and stop fetching new ones. Saving refetches the enabled feeds.</p>
-          <FeedsEditor feeds={feeds} setFeeds={setFeeds} />
         </section>
 
         {/* Change password */}

@@ -18,6 +18,16 @@
   --accent: #f7931a; /* bitcoin orange */
   --accent-dim: rgba(247, 147, 26, 0.12);
   --accent-border: rgba(247, 147, 26, 0.3);
+  /* Coin analysis: bullish / bearish / warning / no data, and the chart's EMA lines */
+  --up: #2fc98d;
+  --up-soft: rgba(47, 201, 141, 0.12);
+  --down: #ff6b7a;
+  --down-soft: rgba(255, 107, 122, 0.12);
+  --warn: #e7b04b;
+  --warn-soft: rgba(231, 176, 75, 0.12);
+  --na: #6c7890;
+  --ema-fast: #f2bb3d;
+  --ema-slow: #a68cff;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }

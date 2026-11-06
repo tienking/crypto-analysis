@@ -50,7 +50,8 @@ function Widget({ symbol }) {
   return <div ref={ref} style={{ height: "100%", width: "100%" }} />;
 }
 
-export default function MarketChart() {
+/** `onSelect(label)` runs when a coin is picked, e.g. "BTCUSDT" (the analysis follows the chart). */
+export default function MarketChart({ onSelect }) {
   const [coins, setCoins] = useState(DEFAULT_COINS);
   const [coin, setCoin] = useState(DEFAULT_COINS[0]);
 
@@ -69,7 +70,7 @@ export default function MarketChart() {
         <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-muted)", letterSpacing: "0.06em" }}>MARKET · 1H</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {coins.map(c => (
-            <button key={c.label} onClick={() => setCoin(c)}
+            <button key={c.label} onClick={() => { setCoin(c); onSelect?.(c.label); }} aria-pressed={coin.label === c.label}
               style={{
                 fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 8, cursor: "pointer",
                 fontFamily: "var(--font-mono)",

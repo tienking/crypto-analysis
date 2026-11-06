@@ -14,8 +14,13 @@ function renderMd(text) {
   });
 }
 
-const WELCOME = { role: "assistant", content: "Hi! I'm your crypto news AI assistant.\nAsk me about the latest news, a coin, a project, or what's moving the market." };
-const SUGGESTED = ["What's the top crypto news today?", "Summarize the latest Bitcoin news", "What is Ethereum staking?"];
+// The assistant explains the analysis on screen (the server recomputes it as context).
+const WELCOME = { role: "assistant", content: "Chào bạn! Mình là trợ lý AI của Crypto Analysis.\nHỏi mình về kết quả phân tích coin đang xem, từng tiêu chí, hoặc kiến thức crypto nói chung." };
+const suggestions = coin => [
+  `Vì sao ${coin} được chấm điểm như vậy?`,
+  "Tiêu chí nào đang kéo điểm xuống?",
+  "Funding và Open Interest đang nói gì?",
+];
 
 function Bubble({ msg }) {
   const isUser = msg.role === "user";
@@ -29,7 +34,8 @@ function Bubble({ msg }) {
   );
 }
 
-export default function ChatPopup() {
+/** `analysis` = {symbol, timeframe, thresholds, weights} of the coin on screen, or null. */
+export default function ChatPopup({ analysis }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([WELCOME]);
   const [input, setInput] = useState("");
@@ -47,11 +53,11 @@ export default function ChatPopup() {
     setMessages(prev => [...prev, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const { reply, provider: p } = await chat(text, history);
+      const { reply, provider: p } = await chat(text, history, analysis);
       if (p) setProvider(p);
       setMessages(prev => [...prev, { role: "assistant", content: reply || "—" }]);
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Có lỗi xảy ra. Bạn thử lại nhé." }]);
     }
     setLoading(false);
   };
@@ -68,14 +74,14 @@ export default function ChatPopup() {
               <span style={{ fontSize: 13, fontWeight: 600 }}>Crypto AI</span>
               {provider && <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "capitalize" }}>· {provider}</span>}
             </div>
-            <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
+            <button onClick={() => setOpen(false)} aria-label="Đóng" style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 12px", overscrollBehavior: "contain" }}>
             {messages.map((m, i) => <Bubble key={i} msg={m} />)}
             {messages.length === 1 && !loading && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, marginLeft: 31 }}>
-                {SUGGESTED.map(s => (
+                {suggestions((analysis?.symbol || "BTC").toUpperCase()).map(s => (
                   <button key={s} onClick={() => send(s)}
                     style={{ fontSize: 12, padding: "5px 11px", borderRadius: 16, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--font-display)" }}>{s}</button>
                 ))}
@@ -93,7 +99,7 @@ export default function ChatPopup() {
           <div style={{ padding: "10px 12px", borderTop: "1px solid var(--border)", display: "flex", gap: 7, alignItems: "center", background: "var(--bg-card)" }}>
             <textarea value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Ask about crypto news..." rows={1}
+              placeholder={analysis ? `Hỏi về ${analysis.symbol.toUpperCase()}…` : "Hỏi về crypto…"} rows={1}
               style={{ flex: 1, border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "var(--font-display)", resize: "none", outline: "none", lineHeight: 1.5, background: "var(--bg)", color: "var(--text)" }} />
             <button onClick={() => send()} disabled={!canSend}
               style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${canSend ? "var(--accent)" : "var(--border)"}`, background: canSend ? "var(--accent)" : "none", color: canSend ? "#000" : "var(--text-muted)", cursor: canSend ? "pointer" : "default", fontSize: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>↑</button>
@@ -101,7 +107,7 @@ export default function ChatPopup() {
         </div>
       )}
 
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={() => setOpen(o => !o)} aria-label={open ? "Đóng trợ lý AI" : "Mở trợ lý AI"}
         style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1002, width: 50, height: 50, borderRadius: "50%", border: open ? "1px solid var(--border)" : "none", background: open ? "var(--bg-card)" : "var(--accent)", color: open ? "var(--text-muted)" : "#000", fontSize: open ? 22 : 20, cursor: "pointer", boxShadow: open ? "none" : "0 4px 20px rgba(247,147,26,0.4)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
         {open ? "×" : "🤖"}
       </button>

@@ -1,31 +1,52 @@
-# Crypto News
+# Crypto Analysis
 
-A crypto news aggregator. Pulls the latest articles from top crypto RSS feeds on a
-schedule, stores them in MongoDB, and serves them as a clean, auto-updating news site
-with in-app reading, source filters, and search.
+A coin trend scorer. A TradingView market chart sits on top; below it, any coin is scored
+from **−100 to +100** with **7 weighted technical criteria** on live Binance data, with a
+verdict, the indicators behind it, and an AI assistant that explains the analysis on screen.
+The analysis UI is in Vietnamese.
 
 🔗 **Live:** [tienmai.space/projects/crypto-news](https://tienmai.space/projects/crypto-news)
+(the URL keeps its old name; the RSS news site it used to be is gone)
 
 ---
 
 ## How it works
 
-1. A FastAPI backend fetches a curated list of crypto RSS feeds (CoinDesk, Cointelegraph,
-   Decrypt, The Block, CryptoSlate, Bitcoin Magazine, BeInCrypto, CoinJournal).
-2. Articles are normalized (title, summary, content, image, source, published) and
-   **upserted into MongoDB, deduped by `guid`** — so each refresh only adds new items.
-3. An in-process **APScheduler** job refreshes every `REFRESH_MINUTES` (default 15) and
-   once on startup. No external cron needed.
-   A **MongoDB TTL index** auto-deletes articles older than `ARTICLE_TTL_DAYS` (default 30)
-   so storage stays bounded — no cleanup job required.
-4. The React frontend lists articles (featured + grid), filters by source, searches, and
-   opens an **in-app reader** (with a link to the original).
-5. An **AI chatbot** (bottom-right) answers questions about crypto and the latest news —
-   it gets the 30 most recent headlines as context (RAG). The provider is switchable
-   between **Grok (xAI)** and **Gemini (Google)**, each with its own model.
-6. An **Admin page** (`/projects/crypto-news/admin`, JWT login) edits the TradingView chart
-   coin pairs, the RSS source list, and the AI provider/model — all stored in MongoDB
-   (`settings` collection).
+1. **Market chart** — a TradingView candle chart (1H) for the coin pairs set in Admin.
+   Picking a pair on the chart analyses that coin below.
+2. **Analysis** — the backend pulls Binance public market data (no API key): candles for the
+   timeframe and the next higher one, BTC candles, funding rate and open-interest change.
+   It computes EMA, RSI (Wilder), MACD, ADX and price pivots with numpy, then scores 7
+   criteria, each giving a signal in `[-1, 1]` (or no data):
+
+   | Criterion | Weight | Bullish when |
+   |---|---|---|
+   | Higher-timeframe agreement | 20 | EMA trend up on the higher timeframe (15m→1h, 1h→4h, 4h→1d, 1d→1w) |
+   | EMA trend | 20 | Price > EMA50 > EMA200 |
+   | Price structure | 15 | Higher high + higher low, or a break of the last pivot high |
+   | Momentum | 15 | RSI ≥ 50 and rising; MACD histogram positive and widening |
+   | Volume confirmation | 10 | Green-candle volume ≥ 1.2× red over 20 candles |
+   | Derivatives | 10 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
+   | BTC context | 10 | BTC's EMA trend up on the same timeframe (n/a when analysing BTC) |
+
+   **Score = 100 × Σ(weight × signal) / Σ weight** of the criteria that have data. ADX14 below
+   20 makes the verdict **ranging** whatever the score; otherwise ≥ 50 strong up, ≥ 20 lean up,
+   mirrored for down. Warnings (no points): RSI overbought/oversold, negative funding (short
+   squeeze risk), higher timeframe against the current one.
+3. **Settings** — visitors can change every threshold and weight; they are kept in their
+   browser (`localStorage`: `ca-thresholds`, `ca-weights`, `ca-last`) and sent with each
+   request. The analysis refreshes every 60 s (can be turned off).
+4. **AI assistant** (bottom-right) — Grok (xAI) or Gemini (Google), switchable in Admin. Each
+   message sends the coin, timeframe, thresholds and weights on screen; the **server reruns the
+   analysis** (15 s cache) and gives the result to the model as context, so the browser cannot
+   feed it made-up numbers.
+5. **Admin** (`/projects/crypto-news/admin`, JWT login) — chart coin pairs, AI provider/model,
+   password. Stored in MongoDB (`settings` collection).
+
+Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
+USDⓈ-M futures; funding and open interest from `fapi.binance.com`. Missing optional data
+(higher timeframe, BTC, funding, OI) only marks that criterion "no data". ⚠️ Binance blocks
+US IPs (HTTP 451): the server must run outside the US.
 
 ---
 
@@ -34,11 +55,10 @@ with in-app reading, source filters, and search.
 | Layer | Tool |
 |-------|------|
 | Backend | Python / FastAPI · Uvicorn (port **8003**) |
-| RSS | feedparser + httpx (async fetch) |
-| Scheduler | APScheduler (in-process, every 15 min) |
-| Chatbot | Grok (xAI) or Gemini (Google) — switchable in Admin, RAG over recent headlines |
-| Database | MongoDB (Motor) — db `cryptonews`, collection `articles` |
-| Frontend | React 19 + Vite (base `/projects/crypto-news/`) · Inter + JetBrains Mono |
+| Analysis | numpy (no pandas / TA library) · httpx async Binance client with host fallback and a 15 s TTL cache |
+| Chatbot | Grok (xAI) or Gemini (Google), grounded in the analysis on screen |
+| Database | MongoDB (Motor) — db `cryptonews`, collection `settings` |
+| Frontend | React 19 + Vite (base `/projects/crypto-news/`) · Inter + JetBrains Mono · TradingView widget |
 | Hosting | Hostinger VPS (shared), Nginx, systemd, GitLab CI/CD |
 
 ---
@@ -47,36 +67,38 @@ with in-app reading, source filters, and search.
 
 ```
 crypto-news/
-├── main.py                  # FastAPI app + APScheduler (refresh on startup + interval)
-├── api.py                   # Routes (/api/crypto-news/*)
-├── rss.py                   # DEFAULT_FEEDS + fetch/parse/normalize (feeds come from DB)
+├── main.py                  # FastAPI app; shared httpx client → BinanceClient
+├── api.py                   # Routes (/api/crypto-news/*), analysis rate limit, chat context
+├── analysis/                # Coin scoring (ported from the standalone coin-analysis app)
+│   ├── binance.py           # Binance client: host fallback, TTL cache, SymbolNotFound / UpstreamError
+│   ├── config.py            # Thresholds, Weights (pydantic, bounded), Vietnamese labels, HIGHER_TF
+│   ├── indicators.py        # Pure numpy: ema, rsi, macd, adx, pivots
+│   ├── criteria.py          # Candles, Context, the 7 crit_* functions, score(), verdict
+│   └── service.py           # analyze(): parallel fetch → Context → score → JSON (no NaN)
 ├── ai.py                    # Chat dispatcher → Grok or Gemini per AI settings
-├── grok.py                  # Grok (xAI) chat client
-├── gemini.py                # Gemini (Google) chat client
+├── grok.py / gemini.py      # Chat clients
 ├── auth.py                  # Admin JWT + bcrypt
-├── database.py              # Motor: articles + settings (coins/feeds/admin), seed defaults
-├── config.py                # Env loader (Mongo, Grok, JWT_SECRET, ADMIN_*)
-├── requirements.txt
+├── database.py              # Motor: settings (coins / AI / admin), seed defaults
+├── config.py                # Env loader (Mongo, AI keys, JWT_SECRET, ADMIN_*)
+├── tests/                   # pytest, fake Binance + fake AI (no network, no MongoDB)
+├── requirements.txt / requirements-dev.txt
 ├── .env.example
-├── .gitlab-ci.yml
 ├── deploy/
 │   ├── crypto-news.service  # systemd unit (port 8003)
 │   └── nginx-snippet.conf
 └── frontend/
     ├── index.html
     ├── vite.config.js       # base "/projects/crypto-news/", proxy → 8003
-    ├── public/favicon.svg   # 📰
     └── src/
         ├── main.jsx            # Routes to AdminApp if path ends with /admin, else App
-        ├── App.jsx             # News list, source chips, search, load-more, Admin link
-        ├── AdminApp.jsx        # Login + coin-pairs editor + RSS-sources editor
-        ├── index.css           # Dark theme + fonts
+        ├── App.jsx             # Header, chart, analysis, chat
+        ├── AdminApp.jsx        # Login + coin pairs + AI settings + password
+        ├── index.css           # Dark theme, fonts, up/down/warn colours
         ├── components/
-        │   ├── ArticleCard.jsx  # Card (image, source, time-ago, summary)
-        │   ├── Reader.jsx       # In-app article reader + "Read original"
-        │   ├── ChatPopup.jsx    # Grok chatbot (bottom-right)
-        │   └── MarketChart.jsx  # TradingView candle chart (coins from /coins API)
-        └── lib/api.js           # API client + timeAgo()
+        │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
+        │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, criteria, settings
+        │   └── ChatPopup.jsx    # AI assistant (bottom-right)
+        └── lib/api.js           # API client
 ```
 
 ---
@@ -86,24 +108,25 @@ crypto-news/
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/crypto-news/health` | Health check |
-| GET | `/api/crypto-news/articles` | Paginated list (`page`, `limit`, `source`, `q`) |
-| GET | `/api/crypto-news/article/{id}` | Single article (with full content) |
-| GET | `/api/crypto-news/sources` | Distinct source names (for filters) |
-| GET | `/api/crypto-news/coins` | Chart coin pairs (public, for MarketChart) |
-| POST | `/api/crypto-news/refresh` | Manually trigger an RSS refresh |
-| POST | `/api/crypto-news/chat` | Grok chatbot (`message`, `history`) → `{reply}` |
+| GET | `/api/crypto-news/analysis/config` | Default thresholds and weights, Vietnamese labels |
+| POST | `/api/crypto-news/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs. 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
+| GET | `/api/crypto-news/coins` | Chart coin pairs (public) |
+| POST | `/api/crypto-news/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-news/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
 | GET/PUT | `/api/crypto-news/admin/coins` | Read / save chart coin pairs |
-| GET/PUT | `/api/crypto-news/admin/feeds` | Read / save RSS sources (PUT also refetches) |
 | GET/PUT | `/api/crypto-news/admin/ai-settings` | Read / save provider + per-provider model |
+
+`timeframe` ∈ `15m | 1h | 4h | 1d`; the symbol is normalised to `{BASE}USDT`.
 
 > **Admin:** seeded on first run from `ADMIN_USERNAME` (default `admin`) /
 > `ADMIN_PASSWORD` env. If `ADMIN_PASSWORD` is unset, a random one is generated and
-> printed once at startup — there is no guessable default. Coin pairs and feeds live
-> in the `settings` collection — seeded once, then editable via the Admin page.
+> printed once at startup — there is no guessable default.
 >
 > **Required env:** `MONGODB_URL` and `JWT_SECRET` are mandatory — the app refuses to
-> start without them (no fallback secret). Generate `JWT_SECRET` as a long random string.
+> start without them (no fallback secret).
+>
+> **Old news data:** the `articles` collection from the RSS version is no longer used; its
+> TTL index empties it within 30 days of the last fetch.
 
 ---
 
@@ -113,9 +136,10 @@ crypto-news/
 # Backend
 python -m venv crypto-news-venv
 source crypto-news-venv/bin/activate     # Windows: crypto-news-venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env                       # set MONGODB_URL + XAI_API_KEY
-uvicorn main:app --port 8003               # fetches RSS on startup
+pip install -r requirements-dev.txt
+cp .env.example .env                       # set MONGODB_URL, JWT_SECRET, AI keys
+uvicorn main:app --port 8003
+pytest -q                                  # no network needed
 
 # Frontend (separate terminal)
 cd frontend
@@ -129,7 +153,7 @@ npm run dev                                # proxies /api/ to http://127.0.0.1:8
 
 ## Deployment
 
-> **Which version is live?** The UI shows `v<x.y.z>` in the bottom-left corner of every page (news + admin) — the `version` from `frontend/package.json`, bumped on every code change. After the CI pipeline finishes it should match `package.json` on `main` — if not, the deploy didn't run or the build failed.
+> **Which version is live?** The UI shows `v<x.y.z>` in the bottom-left corner of every page (site + admin) — the `version` from `frontend/package.json`, bumped on every code change. After the CI pipeline finishes it should match `package.json` on `main` — if not, the deploy didn't run or the build failed.
 
 Auto-deploy via GitLab CI/CD on push to `main`. On the VPS:
 
@@ -138,13 +162,15 @@ Auto-deploy via GitLab CI/CD on push to `main`. On the VPS:
 cd /root/projects/crypto-news
 git pull origin main
 source crypto-news-venv/bin/activate
-pip install -r requirements.txt --quiet
+pip install -r requirements.txt --quiet     # now installs numpy
 cd frontend && npm install --silent && npm run build && cd ..
 systemctl restart crypto-news
 ```
 
-Add the blocks from `deploy/nginx-snippet.conf` to the tienmai Nginx server block.
+Check Binance is reachable from the VPS (HTTP 451 means a blocked region):
 
-### Adding / removing feeds
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "https://data-api.binance.vision/api/v3/ping"   # expect 200
+```
 
-Edit the `FEEDS` list in [`rss.py`](rss.py) and redeploy.
+Add the blocks from `deploy/nginx-snippet.conf` to the tienmai Nginx server block (unchanged).
