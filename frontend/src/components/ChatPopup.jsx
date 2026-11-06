@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { chat } from "../lib/api";
 
+// Served from public/, so it needs the app's base path (/projects/crypto-news/).
+const BOT_ICON = `${import.meta.env.BASE_URL}icons8-bot-100.png`;
+
 function renderMd(text) {
   return String(text).split("\n").map((line, i) => {
     const bullet = /^[*-]\s/.test(line);
@@ -109,7 +112,7 @@ export default function ChatPopup({ analysis }) {
 
       <button onClick={() => setOpen(o => !o)} aria-label={open ? "Đóng trợ lý AI" : "Mở trợ lý AI"}
         style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1002, width: 50, height: 50, borderRadius: "50%", border: open ? "1px solid var(--border)" : "none", background: open ? "var(--bg-card)" : "var(--accent)", color: open ? "var(--text-muted)" : "#000", fontSize: open ? 22 : 20, cursor: "pointer", boxShadow: open ? "none" : "0 4px 20px rgba(247,147,26,0.4)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
-        {open ? "×" : "🤖"}
+        {open ? "×" : <img src={BOT_ICON} alt="" width={34} height={34} style={{ display: "block" }} />}
       </button>
     </>
   );
