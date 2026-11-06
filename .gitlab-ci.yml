@@ -8,4 +8,4 @@ deploy:
   only:
     - main
   script:
-    - sudo /usr/local/bin/deploy-crypto-news.sh
+    - sudo /usr/local/bin/deploy-crypto-analysis.sh

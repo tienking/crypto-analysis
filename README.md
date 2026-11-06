@@ -5,8 +5,8 @@ from **−100 to +100** with **7 weighted technical criteria** on live Binance d
 verdict, the indicators behind it, and an AI assistant that explains the analysis on screen.
 The analysis UI is in Vietnamese.
 
-🔗 **Live:** [tienmai.space/projects/crypto-news](https://tienmai.space/projects/crypto-news)
-(the URL keeps its old name; the RSS news site it used to be is gone)
+🔗 **Live:** [tienmai.space/projects/crypto-analysis](https://tienmai.space/projects/crypto-analysis)
+(formerly **crypto-news**, an RSS news site; the old `/projects/crypto-news/` links redirect here)
 
 ---
 
@@ -40,7 +40,7 @@ The analysis UI is in Vietnamese.
    message sends the coin, timeframe, thresholds and weights on screen; the **server reruns the
    analysis** (15 s cache) and gives the result to the model as context, so the browser cannot
    feed it made-up numbers.
-5. **Admin** (`/projects/crypto-news/admin`, JWT login) — chart coin pairs, AI provider/model,
+5. **Admin** (`/projects/crypto-analysis/admin`, JWT login) — chart coin pairs, AI provider/model,
    password. Stored in MongoDB (`settings` collection).
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
@@ -57,8 +57,8 @@ US IPs (HTTP 451): the server must run outside the US.
 | Backend | Python / FastAPI · Uvicorn (port **8003**) |
 | Analysis | numpy (no pandas / TA library) · httpx async Binance client with host fallback and a 15 s TTL cache |
 | Chatbot | Grok (xAI) or Gemini (Google), grounded in the analysis on screen |
-| Database | MongoDB (Motor) — db `cryptonews`, collection `settings` |
-| Frontend | React 19 + Vite (base `/projects/crypto-news/`) · Inter + JetBrains Mono · TradingView widget |
+| Database | MongoDB (Motor) — db `cryptonews` (old name kept, so no data move), collection `settings` |
+| Frontend | React 19 + Vite (base `/projects/crypto-analysis/`) · Inter + JetBrains Mono · TradingView widget |
 | Hosting | Hostinger VPS (shared), Nginx, systemd, GitLab CI/CD |
 
 ---
@@ -66,9 +66,9 @@ US IPs (HTTP 451): the server must run outside the US.
 ## Project Structure
 
 ```
-crypto-news/
+crypto-analysis/
 ├── main.py                  # FastAPI app; shared httpx client → BinanceClient
-├── api.py                   # Routes (/api/crypto-news/*), analysis rate limit, chat context
+├── api.py                   # Routes (/api/crypto-analysis/*), analysis rate limit, chat context
 ├── analysis/                # Coin scoring (ported from the standalone coin-analysis app)
 │   ├── binance.py           # Binance client: host fallback, TTL cache, SymbolNotFound / UpstreamError
 │   ├── config.py            # Thresholds, Weights (pydantic, bounded), Vietnamese labels, HIGHER_TF
@@ -84,11 +84,11 @@ crypto-news/
 ├── requirements.txt / requirements-dev.txt
 ├── .env.example
 ├── deploy/
-│   ├── crypto-news.service  # systemd unit (port 8003)
+│   ├── crypto-analysis.service  # systemd unit (port 8003)
 │   └── nginx-snippet.conf
 └── frontend/
     ├── index.html
-    ├── vite.config.js       # base "/projects/crypto-news/", proxy → 8003
+    ├── vite.config.js       # base "/projects/crypto-analysis/", proxy → 8003
     └── src/
         ├── main.jsx            # Routes to AdminApp if path ends with /admin, else App
         ├── App.jsx             # Header, chart, analysis, chat
@@ -107,14 +107,14 @@ crypto-news/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/crypto-news/health` | Health check |
-| GET | `/api/crypto-news/analysis/config` | Default thresholds and weights, Vietnamese labels |
-| POST | `/api/crypto-news/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs. 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
-| GET | `/api/crypto-news/coins` | Chart coin pairs (public) |
-| POST | `/api/crypto-news/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
-| POST | `/api/crypto-news/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
-| GET/PUT | `/api/crypto-news/admin/coins` | Read / save chart coin pairs |
-| GET/PUT | `/api/crypto-news/admin/ai-settings` | Read / save provider + per-provider model |
+| GET | `/api/crypto-analysis/health` | Health check |
+| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, Vietnamese labels |
+| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs. 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
+| GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
+| POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
+| POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
+| GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
+| GET/PUT | `/api/crypto-analysis/admin/ai-settings` | Read / save provider + per-provider model |
 
 `timeframe` ∈ `15m | 1h | 4h | 1d`; the symbol is normalised to `{BASE}USDT`.
 
@@ -134,8 +134,8 @@ crypto-news/
 
 ```bash
 # Backend
-python -m venv crypto-news-venv
-source crypto-news-venv/bin/activate     # Windows: crypto-news-venv\Scripts\activate
+python -m venv crypto-analysis-venv
+source crypto-analysis-venv/bin/activate     # Windows: crypto-analysis-venv\Scripts\activate
 pip install -r requirements-dev.txt
 cp .env.example .env                       # set MONGODB_URL, JWT_SECRET, AI keys
 uvicorn main:app --port 8003
@@ -158,13 +158,13 @@ npm run dev                                # proxies /api/ to http://127.0.0.1:8
 Auto-deploy via GitLab CI/CD on push to `main`. On the VPS:
 
 ```bash
-# /usr/local/bin/deploy-crypto-news.sh
-cd /root/projects/crypto-news
+# /usr/local/bin/deploy-crypto-analysis.sh
+cd /root/projects/crypto-analysis
 git pull origin main
-source crypto-news-venv/bin/activate
+source crypto-analysis-venv/bin/activate
 pip install -r requirements.txt --quiet     # now installs numpy
 cd frontend && npm install --silent && npm run build && cd ..
-systemctl restart crypto-news
+systemctl restart crypto-analysis
 ```
 
 Check Binance is reachable from the VPS (HTTP 451 means a blocked region):

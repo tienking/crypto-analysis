@@ -14,7 +14,7 @@ from analysis.binance import SymbolNotFound, UpstreamError
 from analysis.config import Thresholds, Weights
 from analysis.criteria import Candles, Context, score
 
-URL = "/api/crypto-news/analysis"
+URL = "/api/crypto-analysis/analysis"
 
 
 def make_klines(trend: float, n: int = 400, seed: int = 1):
@@ -118,7 +118,7 @@ def test_chat_gets_the_analysis_as_context(client, monkeypatch):
         seen["system"], seen["conversation"] = system, conversation
         return "ok", "fake"
     monkeypatch.setattr(api, "ai_chat", fake_ai)
-    r = client(0.004).post("/api/crypto-news/chat", json={
+    r = client(0.004).post("/api/crypto-analysis/chat", json={
         "message": "Vì sao điểm cao?", "analysis": {"symbol": "SOL", "timeframe": "1h"}})
     assert r.json() == {"reply": "ok", "provider": "fake"}
     assert "=== ANALYSIS ON SCREEN ===" in seen["system"] and "SOLUSDT" in seen["system"]
@@ -134,7 +134,7 @@ def test_chat_without_analysis_or_with_a_bad_coin(client, monkeypatch):
         return "ok", "fake"
     monkeypatch.setattr(api, "ai_chat", fake_ai)
     c = client()
-    assert c.post("/api/crypto-news/chat", json={"message": "hi"}).status_code == 200
-    assert c.post("/api/crypto-news/chat", json={"message": "hi", "analysis": {"symbol": "NOPE"}}).status_code == 200
+    assert c.post("/api/crypto-analysis/chat", json={"message": "hi"}).status_code == 200
+    assert c.post("/api/crypto-analysis/chat", json={"message": "hi", "analysis": {"symbol": "NOPE"}}).status_code == 200
     assert "ANALYSIS ON SCREEN" not in systems[0]
     assert "could not be loaded" in systems[1]

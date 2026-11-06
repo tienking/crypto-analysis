@@ -1,6 +1,6 @@
 .env
 venv/
-crypto-news-venv/
+*-venv/
 __pycache__/
 *.pyc
 frontend/node_modules/

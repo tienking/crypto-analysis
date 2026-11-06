@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { chat } from "../lib/api";
 
-// Served from public/, so it needs the app's base path (/projects/crypto-news/).
+// Served from public/, so it needs the app's base path (/projects/crypto-analysis/).
 const BOT_ICON = `${import.meta.env.BASE_URL}icons8-bot-100.png`;
 
 function renderMd(text) {

@@ -1,4 +1,4 @@
-const BASE = "/api/crypto-news";
+const BASE = "/api/crypto-analysis";
 
 // ── Coin analysis ──────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword } from "./lib/api";
 
-const SITE_URL = "/projects/crypto-news/";
+const SITE_URL = "/projects/crypto-analysis/";
 
 function getToken() {
   const t = localStorage.getItem("cn_admin_token");

@@ -9,7 +9,7 @@ const { version } = JSON.parse(readFileSync(new URL("./package.json", import.met
 export default defineConfig({
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify(version) },
-  base: "/projects/crypto-news/",
+  base: "/projects/crypto-analysis/",
   server: {
     proxy: {
       "/api": "http://127.0.0.1:8003",

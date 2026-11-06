@@ -1,0 +1,14 @@
+[Unit]
+Description=Crypto Analysis FastAPI App
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/projects/crypto-analysis
+EnvironmentFile=/root/projects/crypto-analysis/.env
+ExecStart=/root/projects/crypto-analysis/crypto-analysis-venv/bin/uvicorn main:app --host 127.0.0.1 --port 8003
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

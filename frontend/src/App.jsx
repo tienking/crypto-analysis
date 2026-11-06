@@ -14,7 +14,7 @@ export default function App() {
           <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
             Crypto<span style={{ color: "var(--accent)" }}>Analysis</span>
           </h1>
-          <a href="/projects/crypto-news/admin"
+          <a href="/projects/crypto-analysis/admin"
             style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "8px 14px", whiteSpace: "nowrap" }}>
             Admin
           </a>

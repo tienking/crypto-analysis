@@ -13,9 +13,9 @@ from analysis.service import analyze
 router = APIRouter()
 
 
-@router.get("/api/crypto-news/health")
+@router.get("/api/crypto-analysis/health")
 async def health():
-    return {"status": "ok", "service": "crypto-news"}
+    return {"status": "ok", "service": "crypto-analysis"}
 
 
 # ── Coin analysis (7 weighted criteria on Binance data) ────────────────────────
@@ -56,7 +56,7 @@ async def _run_analysis(request: Request, body: AnalyzeRequest) -> dict:
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
 
-@router.get("/api/crypto-news/analysis/config")
+@router.get("/api/crypto-analysis/analysis/config")
 async def analysis_config():
     return {
         "timeframes": TIMEFRAMES,
@@ -66,7 +66,7 @@ async def analysis_config():
         "criteria": CRITERIA_META,
     }
 
-@router.post("/api/crypto-news/analysis")
+@router.post("/api/crypto-analysis/analysis")
 async def analysis(body: AnalyzeRequest, request: Request):
     _check_analysis_rate(_client_ip(request))
     return await _run_analysis(request, body)
@@ -110,7 +110,7 @@ def _analysis_context(a: dict) -> str:
     lines += [f"Warning: {w}" for w in a["warnings"]]
     return "\n".join(lines)
 
-@router.post("/api/crypto-news/chat")
+@router.post("/api/crypto-analysis/chat")
 async def chat(req: ChatRequest, request: Request):
     system = SYSTEM_PROMPT
     if req.analysis:
@@ -135,7 +135,7 @@ async def chat(req: ChatRequest, request: Request):
 
 # ── Public: chart coins ─────────────────────────────────────────────────────────
 
-@router.get("/api/crypto-news/coins")
+@router.get("/api/crypto-analysis/coins")
 async def coins():
     return await get_coins()
 
@@ -185,7 +185,7 @@ def _record_login_failure(ip: str):
         entry["locked_until"] = now + _LOCKOUT_SECONDS
     _login_attempts[ip] = entry
 
-@router.post("/api/crypto-news/admin/login")
+@router.post("/api/crypto-analysis/admin/login")
 async def admin_login(req: LoginRequest, request: Request):
     ip = _client_ip(request)
     _check_login_rate(ip)
@@ -196,11 +196,11 @@ async def admin_login(req: LoginRequest, request: Request):
     _login_attempts.pop(ip, None)
     return {"access_token": create_token(req.username), "token_type": "bearer"}
 
-@router.get("/api/crypto-news/admin/coins")
+@router.get("/api/crypto-analysis/admin/coins")
 async def admin_get_coins(_: str = Depends(verify_admin)):
     return await get_coins()
 
-@router.put("/api/crypto-news/admin/coins")
+@router.put("/api/crypto-analysis/admin/coins")
 async def admin_set_coins(data: CoinsUpdate, _: str = Depends(verify_admin)):
     await set_coins([c.model_dump() for c in data.items])
     return {"ok": True}
@@ -211,11 +211,11 @@ class AISettingsUpdate(BaseModel):
     grok_model: str
     gemini_model: str
 
-@router.get("/api/crypto-news/admin/ai-settings")
+@router.get("/api/crypto-analysis/admin/ai-settings")
 async def admin_get_ai(_: str = Depends(verify_admin)):
     return await get_ai_settings()
 
-@router.put("/api/crypto-news/admin/ai-settings")
+@router.put("/api/crypto-analysis/admin/ai-settings")
 async def admin_set_ai(data: AISettingsUpdate, _: str = Depends(verify_admin)):
     provider = data.provider if data.provider in ("grok", "gemini") else "grok"
     await set_ai_settings({"provider": provider, "grok_model": data.grok_model, "gemini_model": data.gemini_model})
@@ -226,7 +226,7 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
-@router.put("/api/crypto-news/admin/password")
+@router.put("/api/crypto-analysis/admin/password")
 async def admin_change_password(data: PasswordChange, _: str = Depends(verify_admin)):
     admin = await get_admin()
     if not admin or not check_password(data.current_password, admin.get("hashed_password", "")):
