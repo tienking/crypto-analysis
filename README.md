@@ -90,8 +90,8 @@ The analysis UI is in Vietnamese.
    capitulation candle (red, volume ≥ 2× the 20-candle average) in the last 5. At a low, the
    card shows the **measured share of past lows with the same number of signs (0/1/2/3+) that
    held** for the next 7 / 60 days, against the share of all lows; away from a low it shows
-   the distance to it and no rate. Measured by `python -m backtest.bottoms` on spot history
-   since 2017 of the 10 backtest coins (pasted into `RATES`, not run by a timer):
+   the distance to it and no rate. Measured on spot history since 2017 of the 10 backtest
+   coins, re-measured every week (see Backtest pipeline); the table at the first measurement:
 
    | Signs | Short (4h, 7 days) | Mid (1d, 60 days) |
    |---|---|---|
@@ -125,7 +125,8 @@ The analysis UI is in Vietnamese.
    group, a **chart of every run** (test IC of the weights in effect after the run, per group;
    filled dot = new weights applied, hollow = kept; hover or arrow keys for the values),
    recent runs (test IC now → proposed, applied or why not), **Lock** (runs still
-   propose but apply nothing) and **Roll back** (re-activate the previous set of a group).
+   propose but apply nothing) and **Roll back** (re-activate the previous set of a group);
+   plus the **bottom-signal rates** in use and the last measurement (applied or why kept).
 
 ### Backtest pipeline
 
@@ -134,7 +135,7 @@ Two systemd timers on the VPS run the `backtest/` package (`deploy/crypto-analys
 | Job | When | What |
 |---|---|---|
 | `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK, AVAX. Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
-| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
+| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
 
 Guardrails of a weekly update (`backtest/fit.py`):
 1. Each (coin, timeframe) history is split in time: older half = train, newer half = test.
@@ -148,12 +149,17 @@ Guardrails of a weekly update (`backtest/fit.py`):
 5. Derivatives and liquidation stay fixed until the archive holds **180 days** of OI; on
    ~15 days a trial run gave liquidation an IC of +0.07, which is exactly the noise this
    threshold keeps out.
+6. Bottom-signal rates: a new table is applied only if every sign-count group has ≥ 200
+   lows, 0 signs has the lowest rate and 3+ the highest, and weights are not locked; otherwise
+   the measurement is stored and the active table kept. `python -m backtest.bottoms` runs this
+   step alone (`--dry-run` only prints).
 
 Storage: MongoDB database `ca_backtest` (env `BACKTEST_DB`) on the same cluster:
 `market_5m` (one document per coin per UTC day, 288 slots per field, about 80 MB per year
 for 10 coins), `weight_sets` (every set used, one `active` per group), `runs` (every weekly
-run with its metrics) and `state` (`{_id: "weights", locked}`). The web app reads the active
-sets once a minute and falls back to the code defaults when the database is unreachable.
+run with its metrics), `state` (`{_id: "weights", locked}`) and `bottom_rates` (every
+bottom-rate measurement, one `active`). The web app reads the active weight sets and bottom
+table once a minute and falls back to the code defaults when the database is unreachable.
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
 USDⓈ-M futures; funding, open interest (change + history) and futures candles for the
@@ -202,7 +208,7 @@ crypto-analysis/
 │   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
 │   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)
-│   ├── bottoms.py           # Manual: measure the bottom-signal hit rates behind analysis/bottoms.py
+│   ├── bottoms.py           # Weekly (from reweight) or manual: measure bottom-signal hit rates → bottom_rates
 │   └── reweight.py          # Weekly: backtest → propose → apply or keep → record the run
 ├── tests/                   # pytest, fake Binance + fake AI (no network, no MongoDB)
 ├── requirements.txt / requirements-dev.txt
@@ -238,14 +244,14 @@ crypto-analysis/
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/crypto-analysis/health` | Health check |
-| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels, `bottoms` (horizons, measured rates, samples, base rates) |
+| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels, `bottoms` (horizons, active measured rates, samples, base rates, `updated_at`, `source`) |
 | POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` (no `weights` = the active backtest set of the timeframe's group; `weights_info` says which) → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures), `bottoms` (`short`, `mid`: at a low?, signs, measured rate; `cycle`: weekly checklist). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
 | GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
 | POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
 | GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
 | GET/PUT | `/api/crypto-analysis/admin/ai-settings` | Read / save provider + per-provider model |
-| GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, `history` (chart points of the last 104 completed runs), lock state, days of OI archived |
+| GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, `history` (chart points of the last 104 completed runs), lock state, days of OI archived, `bottoms` (active rate table + last measurement) |
 | PUT | `/api/crypto-analysis/admin/weights/lock` | `{locked}` |
 | POST | `/api/crypto-analysis/admin/weights/rollback` | `{group: short | long}` → re-activate the previous set (400 if none) |
 

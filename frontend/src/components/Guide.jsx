@@ -332,12 +332,16 @@ export default function Guide({ onClose }) {
           </p>
           <p style={p}>
             Trang đã đếm lại mọi lần như vậy trên lịch sử 10 coin lớn từ 2017, chia theo số dấu hiệu đáy có lúc đó. Con số bạn
-            thấy là kết quả của nhóm có cùng số dấu hiệu với hiện tại:
+            thấy là kết quả của nhóm có cùng số dấu hiệu với hiện tại. Bảng được đo lại mỗi sáng Chủ nhật cùng lúc với trọng số,
+            và chỉ thay khi đủ mẫu và thứ tự hợp lý (0 dấu hiệu thấp nhất, 3–4 dấu hiệu cao nhất):
           </p>
           {cfg?.bottoms && (
             <div style={{ margin: "4px 0 12px" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", maxWidth: 520 }}>
-                <caption style={{ ...muted, textAlign: "left", margin: "0 0 6px" }}>Tỉ lệ đáy giữ được theo số dấu hiệu</caption>
+                <caption style={{ ...muted, textAlign: "left", margin: "0 0 6px" }}>
+                  Tỉ lệ đáy giữ được theo số dấu hiệu
+                  {cfg.bottoms.updated_at ? ` · đo ngày ${new Date(String(cfg.bottoms.updated_at).endsWith("Z") ? cfg.bottoms.updated_at : cfg.bottoms.updated_at + "Z").toLocaleDateString("vi-VN")}` : ""}
+                </caption>
                 <thead><tr><th style={th}>Số dấu hiệu</th><th style={{ ...th, textAlign: "right" }}>Ngắn hạn (4H, 7 ngày)</th><th style={{ ...th, textAlign: "right" }}>Trung hạn (1D, 60 ngày)</th></tr></thead>
                 <tbody>
                   {[0, 1, 2, 3].map(k => (

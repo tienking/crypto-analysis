@@ -3,12 +3,11 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Literal, Optional
 import time
 from database import (get_coins, set_coins, get_admin, set_admin_password,
-                      get_ai_settings, set_ai_settings, get_active_weights, get_weights_admin,
+                      get_ai_settings, set_ai_settings, get_active_weights, get_bottom_rates, get_weights_admin,
                       set_weights_locked, rollback_weights)
 from ai import ai_chat
 from auth import create_token, verify_admin, check_password, hash_password
-from analysis.bottoms import BASE, HORIZONS, RATES
-from analysis.bottoms import N as BOTTOM_N
+from analysis.bottoms import HORIZONS
 from analysis.binance import SymbolNotFound, UpstreamError
 from analysis.config import CRITERIA_META, THRESHOLD_LABELS, TIMEFRAMES, Thresholds, Weights
 from analysis.service import analyze
@@ -60,7 +59,9 @@ async def _run_analysis(request: Request, body: AnalyzeRequest) -> dict:
         weights = Weights(**active["weights"])
         info = {"source": "auto", "group": g, "updated_at": active["updated_at"], "origin": active["source"]}
     try:
-        d = await analyze(request.app.state.binance, body.symbol, body.timeframe, body.thresholds, weights)
+        rates = await get_bottom_rates()
+        d = await analyze(request.app.state.binance, body.symbol, body.timeframe, body.thresholds, weights,
+                          bottom_table=rates["table"])
         d["weights_info"] = info
         return d
     except SymbolNotFound as e:
@@ -69,6 +70,13 @@ async def _run_analysis(request: Request, body: AnalyzeRequest) -> dict:
         raise HTTPException(502, "Không kết nối được Binance. Thử lại sau ít phút.") from e
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
+
+def _bottoms_config(b: dict) -> dict:
+    t = b["table"]
+    return {"horizons": HORIZONS, "updated_at": b["updated_at"], "source": b["source"],
+            "rates": {k: t[k]["rates"] for k in HORIZONS}, "samples": {k: t[k]["samples"] for k in HORIZONS},
+            "base": {k: t[k]["base"] for k in HORIZONS}}
+
 
 @router.get("/api/crypto-analysis/analysis/config")
 async def analysis_config():
@@ -80,7 +88,7 @@ async def analysis_config():
         "weight_sets": {g: v["weights"] for g, v in (await get_active_weights()).items()},
         "weight_groups": GROUPS,
         "criteria": CRITERIA_META,
-        "bottoms": {"horizons": HORIZONS, "rates": RATES, "samples": BOTTOM_N, "base": BASE},
+        "bottoms": _bottoms_config(await get_bottom_rates()),
     }
 
 @router.post("/api/crypto-analysis/analysis")

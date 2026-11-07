@@ -13,7 +13,8 @@ candles; a capitulation candle (red, volume ≥ 2× the 20-candle average) in th
 
 RATES[horizon][k] = share of past 7-day / 60-day lows with k signs (3 = 3 or more) that
 held, from backtest/bottoms.py (spot history since 2017 of BTC, ETH, SOL, XRP, LTC, BNB,
-DOGE, ADA, LINK, AVAX). Re-run that script to refresh them.
+DOGE, ADA, LINK, AVAX). The weekly backtest re-measures them into the `bottom_rates`
+collection; the constants below are the fallback when the database has no active table.
 
 The cycle checklist (weekly candles) is not a probability: Binance history holds only two
 cycle bottoms (Dec 2018, Nov 2022), far too few to measure one.
@@ -39,6 +40,20 @@ HORIZONS = {
 RATES = {"short": [0.192, 0.29, 0.307, 0.377], "mid": [0.246, 0.31, 0.36, 0.497]}
 N = {"short": [4227, 12217, 10683, 2512], "mid": [639, 1520, 1256, 290]}
 BASE = {"short": 0.29, "mid": 0.33}
+
+
+def default_table() -> dict:
+    """{horizon: {"rates", "samples", "base"}}, the shape stored in `bottom_rates`."""
+    return {k: {"rates": list(RATES[k]), "samples": list(N[k]), "base": BASE[k]} for k in HORIZONS}
+
+
+def valid_table(t) -> bool:
+    try:
+        return all(len(t[k]["rates"]) == 4 and len(t[k]["samples"]) == 4
+                   and all(0 <= float(x) <= 1 for x in t[k]["rates"]) and 0 <= float(t[k]["base"]) <= 1
+                   for k in HORIZONS)
+    except (KeyError, TypeError, ValueError):
+        return False
 
 CYCLE_DRAWDOWN = 0.70        # price at least 70% under the all-time high
 CYCLE_LOOKBACK = 8           # weeks for the RSI and capitulation conditions
@@ -84,8 +99,10 @@ def held(l, i: int, recent: int, span: int) -> bool:
     return bool(at_low(l, i, recent, span) and l[i - recent + 1:i + 1].min() <= l[i + 1:i + span + 1].min())
 
 
-def horizon_view(c, key: str) -> dict | None:
-    """Bottom reading for one horizon. `c` = Candles whose last row is the live candle."""
+def horizon_view(c, key: str, table: dict | None = None) -> dict | None:
+    """Bottom reading for one horizon. `c` = Candles whose last row is the live candle;
+    `table` = the active rate table (default: the constants above)."""
+    t = (table or default_table())[key]
     cfg = HORIZONS[key]
     recent, span = cfg["recent"], cfg["span"]
     i = len(c) - 2                                        # last closed candle
@@ -105,9 +122,9 @@ def horizon_view(c, key: str) -> dict | None:
         "broken": bool(c.low[-1] < low),                  # the live candle already went lower
         "signs": [{"id": sid, "name": name, "ok": bool(S[j])} for j, (sid, name) in enumerate(SIGNS)],
         "count": int(S.sum()),
-        "rate": RATES[key][k] if is_low else None,
-        "samples": N[key][k],
-        "base": BASE[key],
+        "rate": float(t["rates"][k]) if is_low else None,
+        "samples": int(t["samples"][k]),
+        "base": float(t["base"]),
     }
 
 

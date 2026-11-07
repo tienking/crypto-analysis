@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 import api
 from analysis.binance import SymbolNotFound, UpstreamError
+from analysis.bottoms import default_table
 from analysis.config import Thresholds, Weights
 from analysis.criteria import Candles, Context, score
 
@@ -63,11 +64,18 @@ AUTO = {
 }
 
 
+BOTTOM_RATES = {"table": default_table(), "updated_at": None, "source": "code"}
+
+
 @pytest.fixture(autouse=True)
 def fake_weights(monkeypatch):
     async def active(force=False):
         return AUTO
+
+    async def rates(force=False):
+        return BOTTOM_RATES
     monkeypatch.setattr(api, "get_active_weights", active)
+    monkeypatch.setattr(api, "get_bottom_rates", rates)
 
 
 @pytest.fixture
@@ -105,6 +113,21 @@ def test_bottoms_in_the_response_and_the_chat_context(client):
     assert b["cycle"]["available"] == 5 and len(b["cycle"]["conditions"]) == 5
     ctx = api._analysis_context(d)
     assert "Đáy ngắn hạn" in ctx and "Cycle-bottom checklist" in ctx
+
+
+def test_bottom_rates_come_from_the_active_table(client, monkeypatch):
+    table = default_table()
+    table["short"]["rates"] = [0.11, 0.22, 0.33, 0.44]
+    table["short"]["base"] = 0.25
+
+    async def rates(force=False):
+        return {"table": table, "updated_at": "2026-11-08T00:15:00", "source": "backtest"}
+    monkeypatch.setattr(api, "get_bottom_rates", rates)
+    c = client(-0.004)
+    s = c.post(URL, json={"symbol": "ETH", "timeframe": "1h"}).json()["bottoms"]["short"]
+    assert s["rate"] == [0.11, 0.22, 0.33, 0.44][min(s["count"], 3)] and s["base"] == 0.25
+    cfg = c.get("/api/crypto-analysis/analysis/config").json()["bottoms"]
+    assert cfg["rates"]["short"] == [0.11, 0.22, 0.33, 0.44] and cfg["source"] == "backtest"
 
 
 def test_bottoms_fail_soft(client, monkeypatch):

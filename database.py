@@ -64,6 +64,7 @@ async def set_ai_settings(data: dict):
 
 # ── Backtest-driven weights (written by backtest/reweight.py, see backtest/store.py) ──
 
+from analysis.bottoms import default_table, valid_table  # noqa: E402
 from analysis.config import Weights  # noqa: E402
 from backtest.store import DB_NAME as BACKTEST_DB, GROUPS, rollback_target  # noqa: E402
 
@@ -94,6 +95,25 @@ async def get_active_weights(force: bool = False) -> dict:
     return out
 
 
+_bottoms_cache: dict = {"at": 0.0, "value": None}
+
+
+async def get_bottom_rates(force: bool = False) -> dict:
+    """{"table", "updated_at", "source"}: the active bottom-rate table, or the code defaults."""
+    import time as _t
+    if not force and _bottoms_cache["value"] and _t.time() - _bottoms_cache["at"] < _WEIGHTS_TTL:
+        return _bottoms_cache["value"]
+    out = {"table": default_table(), "updated_at": None, "source": "code"}
+    try:
+        d = await bt_db["bottom_rates"].find_one({"active": True}, sort=[("created_at", -1)])
+        if d and valid_table(d.get("tables")):
+            out = {"table": d["tables"], "updated_at": d.get("created_at"), "source": "backtest"}
+    except Exception as e:  # noqa: BLE001 — the analysis must work without the backtest DB
+        print(f"[bottoms] using code defaults: {e}")
+    _bottoms_cache.update(at=_t.time(), value=out)
+    return out
+
+
 async def get_weights_admin() -> dict:
     state = await bt_db["state"].find_one({"_id": "weights"}) or {}
     groups = {}
@@ -105,9 +125,13 @@ async def get_weights_admin() -> dict:
     days = await bt_db["market_5m"].count_documents({"symbol": "BTCUSDT", "oi": {"$exists": True}})
     done = [r async for r in bt_db["runs"].find({"status": "done"}, {"started_at": 1, "groups": 1})
             .sort("started_at", -1).limit(104)]
+    last_b = await bt_db["bottom_rates"].find_one({}, {"halves": 0}, sort=[("created_at", -1)])
+    active_b = await get_bottom_rates(force=True)
     return {"locked": bool(state.get("locked")), "groups": groups,
             "runs": [{**r, "_id": str(r["_id"])} for r in runs], "oi_days": days,
-            "history": run_history(done)}
+            "history": run_history(done),
+            "bottoms": {"active": active_b,
+                        "last": {**last_b, "_id": str(last_b["_id"])} if last_b else None}}
 
 
 def run_history(runs: list[dict]) -> list[dict]:

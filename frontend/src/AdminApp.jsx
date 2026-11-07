@@ -103,6 +103,50 @@ const card = { background: "var(--bg-card)", border: "1px solid var(--border)", 
 const small = { fontSize: 12, color: "var(--text-muted)" };
 const btn = { padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "none", color: "var(--text)", fontSize: 12, cursor: "pointer", fontFamily: "var(--font-display)" };
 
+/** Bottom-signal hit rates in use (card "Dấu hiệu đáy"), re-measured by the weekly run. */
+function BottomRatesAdmin({ b }) {
+  const t = b.active.table, last = b.last;
+  const cell = { padding: "4px 0", textAlign: "right", fontFamily: "var(--font-mono)" };
+  const fmt = (h, k) => `${Math.round(t[h].rates[k] * 100)}% (${t[h].samples[k]})`;
+  return (
+    <div style={card}>
+      <p style={{ fontSize: 13, fontWeight: 600 }}>Bottom-signal rates</p>
+      <p style={{ ...small, margin: "2px 0 10px", lineHeight: 1.5 }}>
+        Share of past lows that held, by number of bottom signs (lows measured in brackets). Re-measured by
+        every weekly run; a new table is applied only with ≥ 200 lows per group, 0 signs lowest and 3+ highest,
+        and weights unlocked.
+      </p>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", maxWidth: 520, fontSize: 13, borderCollapse: "collapse" }}>
+          <thead><tr style={{ color: "var(--text-muted)", textAlign: "left" }}>
+            <th style={{ padding: "4px 0", fontWeight: 600 }}>Signs</th>
+            <th style={{ ...cell, fontFamily: "inherit", fontWeight: 600 }}>Short (4h, 7 days)</th>
+            <th style={{ ...cell, fontFamily: "inherit", fontWeight: 600 }}>Mid (1d, 60 days)</th>
+          </tr></thead>
+          <tbody>
+            {[0, 1, 2, 3].map(k => (
+              <tr key={k} style={{ borderTop: "1px solid var(--border)" }}>
+                <td style={{ padding: "4px 0" }}>{k === 3 ? "3+" : k}</td>
+                <td style={cell}>{fmt("short", k)}</td>
+                <td style={cell}>{fmt("mid", k)}</td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              <td style={{ padding: "4px 0" }}>All lows</td>
+              <td style={cell}>{Math.round(t.short.base * 100)}%</td>
+              <td style={cell}>{Math.round(t.mid.base * 100)}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style={{ ...small, marginTop: 8 }}>
+        {b.active.source === "backtest" ? `Active since ${fmtDate(b.active.updated_at)}` : "Code defaults (no table applied yet)"}
+        {last ? ` · last measurement ${fmtDate(last.created_at)}: ${last.applied ? "applied" : "kept"} (${last.reason})` : " · not measured yet"}
+      </p>
+    </div>
+  );
+}
+
 function WeightsAdmin({ token, flash }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
@@ -167,6 +211,8 @@ function WeightsAdmin({ token, flash }) {
           );
         })}
       </div>
+
+      {d.bottoms && <BottomRatesAdmin b={d.bottoms} />}
 
       <div style={card}>
         <p style={{ fontSize: 13, fontWeight: 600 }}>Backtest score per run</p>

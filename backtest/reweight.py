@@ -6,6 +6,7 @@ Two weight groups, because the backtest behaves very differently by timeframe:
 short = 5m/15m/30m/1h, long = 4h/12h/1d. Derivatives and liquidation keep their weight
 until the archive (backtest.collect) holds MIN_OI_DAYS of OI history; then they are fitted
 like the others. Every run is stored in `runs`, every applied change in `weight_sets`.
+The same run re-measures the bottom-signal hit rates (backtest.bottoms -> `bottom_rates`).
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from datetime import datetime, timezone
 from analysis.config import HIGHER_TF, Weights
 
 from . import engine
+from .bottoms import update as update_bottoms
 from .binance_hist import COINS, Http, funding, klines
 from .fit import propose
 from .store import DAY_MS, GROUPS, series_from_docs, sync_db
@@ -113,11 +115,16 @@ def main():
                 db.weight_sets.update_many({"group": g, "active": True}, {"$set": {"active": False}})
                 db.weight_sets.insert_one({"group": g, "weights": res["weights"], "created_at": now(),
                                            "source": "backtest", "active": True, "run_id": run_id})
+        try:
+            bottoms = update_bottoms(db, http, locked)
+        except Exception as e:  # noqa: BLE001 — a failure here must not lose the weights run
+            bottoms = {"applied": False, "reason": f"error: {str(e)[:300]}"}
         db.runs.update_one({"_id": run_id}, {"$set": {
             "status": "done", "finished_at": now(), "locked": locked, "oi_days": days, "deriv_included": use_deriv,
-            "rows": len(rows), "download_s": round(t_dl), "groups": groups}})
+            "rows": len(rows), "download_s": round(t_dl), "groups": groups, "bottoms": bottoms}})
         print(f"[reweight] {len(rows)} rows, oi_days={days}, "
-              + ", ".join(f"{g}: {'applied' if r['applied'] else 'kept'} ({r['reason']})" for g, r in groups.items()),
+              + ", ".join(f"{g}: {'applied' if r['applied'] else 'kept'} ({r['reason']})" for g, r in groups.items())
+              + f", bottom rates: {'applied' if bottoms['applied'] else 'kept'} ({bottoms['reason']})",
               flush=True)
     except Exception as e:
         db.runs.update_one({"_id": run_id}, {"$set": {"status": "error", "finished_at": now(), "error": str(e)[:500]}})

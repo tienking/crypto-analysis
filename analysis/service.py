@@ -49,12 +49,12 @@ def _liq_map(oi_hist, krows, t: Thresholds) -> dict | None:
     return liquidation_map(oi, high, low, close, close[-1], t.liq_range_pct)
 
 
-def _bottoms(rows: dict, weekly) -> dict:
+def _bottoms(rows: dict, weekly, table: dict | None = None) -> dict:
     """Bottom readings per horizon + the cycle checklist; any part may be None (no data)."""
     out = {}
     for key, r in rows.items():
         try:
-            out[key] = horizon_view(Candles.from_klines(r[0]), key) if r and len(r[0]) else None
+            out[key] = horizon_view(Candles.from_klines(r[0]), key, table) if r and len(r[0]) else None
         except Exception:  # noqa: BLE001 — optional, never breaks the analysis
             out[key] = None
     try:
@@ -69,7 +69,7 @@ def _clean(arr) -> list:
 
 
 async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
-                  thresholds: Thresholds, weights: Weights) -> dict:
+                  thresholds: Thresholds, weights: Weights, bottom_table: dict | None = None) -> dict:
     symbol = normalize_symbol(raw_symbol)
     is_btc = symbol == BTC_SYMBOL
     limit = min(1000, max(300, thresholds.ema_slow + 150))
@@ -114,7 +114,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
         is_btc=is_btc, funding=funding, oi_change=oi, liq=liq,
     )
     result = score(ctx, weights)
-    bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk)
+    bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk, bottom_table)
     if tf in SHORT_TF_NO_EDGE:
         result["warnings"].append(
             f"Khung {tf}: backtest trên 10 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "
