@@ -13,6 +13,11 @@ The analysis UI is in Vietnamese.
 ## How it works
 
 1. **Market chart** — a TradingView candle chart (1H) for the coin pairs set in Admin.
+   The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): what
+   the page does, how the score and verdict are computed, each of the 8 criteria (why it
+   exists, exact rules), the warnings, where the weights come from and the limits. Its
+   thresholds and the current weights are read from `/analysis/config`, so the text always
+   matches what the server computes. Esc or ✕ closes it.
    Picking a pair on the chart analyses that coin below.
 2. **Analysis** — the backend pulls Binance public market data (no API key): candles for the
    timeframe and the next higher one, BTC candles, funding rate and open-interest change.
@@ -179,13 +184,14 @@ crypto-analysis/
     ├── vite.config.js       # base "/projects/crypto-analysis/", proxy → 8003
     └── src/
         ├── main.jsx            # Routes to AdminApp if path ends with /admin, else App
-        ├── App.jsx             # Header, chart, analysis, chat
+        ├── App.jsx             # Header (Hướng dẫn + Admin), chart, analysis, chat, guide
         ├── AdminApp.jsx        # Login + AI settings + backtest weights + coin pairs + password
         ├── index.css           # Dark theme, fonts, up/down/warn colours
         ├── components/
         │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
         │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, liquidation map, criteria, settings
         │   ├── RunsChart.jsx    # Admin: test IC per backtest run (SVG line chart, tooltip, hidden table)
+        │   ├── Guide.jsx        # "Hướng dẫn" full-screen guide to the criteria (numbers from /analysis/config)
         │   └── ChatPopup.jsx    # AI assistant (bottom-right)
         └── lib/api.js           # API client
 ```

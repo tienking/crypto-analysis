@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import MarketChart from "./components/MarketChart";
 import Analysis from "./components/Analysis";
 import ChatPopup from "./components/ChatPopup";
+import Guide from "./components/Guide";
+
+const headerBtn = { fontSize: 12, color: "var(--text-muted)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "8px 14px", whiteSpace: "nowrap", background: "transparent", cursor: "pointer", fontFamily: "var(--font-display)", lineHeight: "normal" };
 
 export default function App() {
   const [request, setRequest] = useState(null);   // coin picked on the chart → analysed below
   const [analysis, setAnalysis] = useState(null); // the analysis on screen → chatbot context
+  const [guide, setGuide] = useState(false);
+  const closeGuide = useCallback(() => setGuide(false), []);
 
   return (
     <div style={{ minHeight: "100vh" }}>
@@ -14,10 +19,13 @@ export default function App() {
           <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
             Crypto<span style={{ color: "var(--accent)" }}>Analysis</span>
           </h1>
-          <a href="/projects/crypto-analysis/admin"
-            style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "8px 14px", whiteSpace: "nowrap" }}>
-            Admin
-          </a>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => setGuide(true)} aria-haspopup="dialog"
+              style={{ ...headerBtn, color: "var(--text)", borderColor: "var(--border-hover)" }}>
+              Hướng dẫn
+            </button>
+            <a href="/projects/crypto-analysis/admin" style={headerBtn}>Admin</a>
+          </div>
         </div>
       </header>
 
@@ -27,6 +35,7 @@ export default function App() {
       </main>
 
       <ChatPopup analysis={analysis} />
+      {guide && <Guide onClose={closeGuide} />}
     </div>
   );
 }
