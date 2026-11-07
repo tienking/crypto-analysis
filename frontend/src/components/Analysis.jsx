@@ -230,7 +230,7 @@ function Verdict({ d, narrow }) {
         <div style={{ minWidth: 0 }}>
           <div style={label}>Kết luận · {d.symbol} · khung {d.timeframe} (khung lớn {d.higher_timeframe})</div>
           <div style={{ fontSize: narrow ? 22 : 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: "-0.015em", color: VERDICT_COLOR[d.verdict.key], marginTop: 4 }}>{d.verdict.title}</div>
-          <div style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 4, maxWidth: "62ch", lineHeight: 1.5 }}>{d.verdict.note}</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 4, maxWidth: "88ch", lineHeight: 1.5 }}>{d.verdict.note}</div>
         </div>
         <div style={{ textAlign: narrow ? "left" : "right" }}>
           <div style={label}>{d.symbol} · {d.source}</div>
