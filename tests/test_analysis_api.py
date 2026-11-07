@@ -158,10 +158,16 @@ def test_unknown_timeframe_rejected(client):
     assert client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "2h"}).status_code == 422
 
 
-def test_btc_context_is_na_for_btc(client):
-    d = client(0.004).post(URL, json={"symbol": "BTCUSDT"}).json()
-    btc = next(x for x in d["criteria"] if x["id"] == "btc")
-    assert btc["status"] == "na" and btc["points"] is None
+def test_btc_context_is_dropped_for_btc_and_its_weight_shared(client):
+    d = client(0.004).post(URL, json={"symbol": "BTCUSDT", "timeframe": "4h"}).json()
+    ids = [x["id"] for x in d["criteria"]]
+    assert "btc" not in ids and len(ids) == 7
+    w = {x["id"]: x["weight"] for x in d["criteria"]}
+    assert abs(sum(w.values()) - 100) < 0.5
+    assert w["trend"] == round(17 * 100 / 77, 1)                  # default long weights, btc = 23
+    assert d["weights"]["btc"] == 23                              # the settings keep the nominal set
+    sol = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "4h"}).json()
+    assert len(sol["criteria"]) == 8 and next(x for x in sol["criteria"] if x["id"] == "trend")["weight"] == 17
 
 
 def test_unknown_symbol_404(client):

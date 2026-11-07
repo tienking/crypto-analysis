@@ -36,7 +36,7 @@ The analysis UI is in Vietnamese.
    | Momentum | 17 | RSI ≥ 50 and rising; MACD histogram positive and widening |
    | Volume confirmation | 15 | Green-candle volume ≥ 1.2× red over 20 candles |
    | Derivatives | 5 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
-   | BTC context | 23 | BTC's EMA trend up on the same timeframe (n/a when analysing BTC) |
+   | BTC context | 23 | BTC's EMA trend up on the same timeframe (dropped when analysing BTC: its weight is shared pro rata by the other 7, and the table shows those effective weights; a BTC-only fitted set did not beat this on the test half) |
    | Liquidation zones (estimated) | 5 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
 
    **Weights come from a backtest** (Nov 2026; BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK,

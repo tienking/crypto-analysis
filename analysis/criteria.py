@@ -249,6 +249,15 @@ def score(ctx: Context, weights: Weights) -> dict:
         r = fn(ctx)
         r.weight, r.name = w[r.id], CRITERIA_META[r.id]
         results.append(r)
+    if ctx.is_btc:
+        # BTC has no "BTC context": drop it and share its weight pro rata, so the shown weights
+        # are the ones really used (a backtest found no better BTC-specific set, Nov 2026).
+        results = [r for r in results if r.id != "btc"]
+        rest = sum(r.weight for r in results)
+        if rest:
+            k = sum(w.values()) / rest
+            for r in results:
+                r.weight *= k
 
     active = [r for r in results if r.score is not None and r.weight > 0]
     total_w = sum(r.weight for r in active)
@@ -286,7 +295,7 @@ def score(ctx: Context, weights: Weights) -> dict:
         "verdict": verdict,
         "criteria": [
             {
-                "id": x.id, "name": x.name, "weight": x.weight,
+                "id": x.id, "name": x.name, "weight": round(x.weight, 1),
                 "score": x.score, "status": x.status, "rule": x.rule, "detail": x.detail,
                 "points": None if x.score is None or not total_w else round(100 * x.weight * x.score / total_w, 1),
             }

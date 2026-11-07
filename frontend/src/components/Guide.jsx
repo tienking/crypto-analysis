@@ -234,7 +234,7 @@ export default function Guide({ onClose }) {
           <Criterion id="btc" ex={<ExBtc T={T} />} n={7} title={names.btc || "Bối cảnh BTC"}
             why="Phần lớn altcoin chạy theo Bitcoin: khi BTC giảm mạnh, rất ít coin đi ngược được. Backtest của trang cho thấy đây là tiêu chí có sức dự báo tốt nhất ở khung 4H trở lên.">
             <p style={p}>Áp dụng cách tính của tiêu chí 2 (Xu hướng EMA) cho <b>BTC/USDT cùng khung thời gian</b>.</p>
-            <p style={muted}>Khi đang phân tích chính BTC: "Thiếu dữ liệu", không tính.</p>
+            <p style={muted}>Khi đang phân tích chính BTC: tiêu chí này không có, trọng số của nó được chia lại theo tỉ lệ cho 7 tiêu chí còn lại.</p>
           </Criterion>
 
           <Criterion id="liquidation" ex={<ExLiquidation T={T} />} n={8} title={names.liquidation || "Vùng thanh lý (ước tính)"}
