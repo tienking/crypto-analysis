@@ -25,11 +25,27 @@ const Sig = ({ v, children }) => (
   <li><b style={{ fontFamily: "var(--font-mono)", color: v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "var(--text-muted)" }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v)}</b> {children}</li>
 );
 
+const formula = { fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.7, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", margin: "0 0 10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere" };
+
+function Indicator({ name, what, f, read }) {
+  return (
+    <div style={{ ...box, minWidth: 0 }}>
+      <h3 style={h3}>{name}</h3>
+      <div style={tag}>Mô tả</div>
+      <p style={p}>{what}</p>
+      <div style={tag}>Công thức</div>
+      <pre style={formula}>{f}</pre>
+      <div style={tag}>Cách đọc</div>
+      <p style={p}>{read}</p>
+    </div>
+  );
+}
+
 function Criterion({ id, n, title, why, ex, children }) {
   return (
     <section id={`g-${id}`} style={{ ...box, minWidth: 0 }} aria-labelledby={`g-${id}-t`}>
       <h3 id={`g-${id}-t`} style={h3}>{n}. {title}</h3>
-      <div style={tag}>Vì sao có tiêu chí này</div>
+      <div style={tag}>Mô tả</div>
       <p style={p}>{why}</p>
       <div style={tag}>Cách tính</div>
       {children}
@@ -88,62 +104,63 @@ export default function Guide({ onClose }) {
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "24px max(16px, min(24px, 4vw)) 64px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 28 }}>
         <nav aria-label="Mục lục" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[["g-start", "Trang này làm gì"], ["g-score", "Cách ra điểm"], ["g-criteria", "8 tiêu chí"], ["g-warn", "Cảnh báo"], ["g-weights", "Trọng số"], ["g-bottoms", "Dấu hiệu đáy"], ["g-limits", "Giới hạn"]].map(([id, t]) => (
+          {[["g-indicators", "Các chỉ số"], ["g-criteria", "Các tiêu chí"], ["g-score", "Cách tính điểm"], ["g-warn", "Cảnh báo"], ["g-weights", "Trọng số"], ["g-bottoms", "Dấu hiệu đáy"], ["g-limits", "Giới hạn"]].map(([id, t]) => (
             <a key={id} href={`#${id}`} onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
               style={{ fontSize: 13, color: "var(--text)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 12px" }}>{t}</a>
           ))}
         </nav>
 
-        <section id="g-start" style={{ scrollMarginTop: 80 }}>
-          <h2 style={h2}>Trang này làm gì?</h2>
-          <p style={p}>
-            Bạn nhập một mã coin (ví dụ BTC) và chọn khung thời gian (5m đến 1D). Trang lấy dữ liệu công khai của
-            Binance rồi chấm <b>8 tiêu chí</b>, mỗi tiêu chí trả lời một câu hỏi: xu hướng đang lên hay xuống, lực mua
-            có xác nhận không, dòng tiền phái sinh đang nghiêng về đâu... Kết quả gộp lại thành <b>một điểm từ −100 đến +100</b>.
-          </p>
-          <p style={p}>
-            Điểm dương nghĩa là phần lớn tín hiệu đang nghiêng về <b style={{ color: "var(--up)" }}>tăng</b>, điểm âm là
-            nghiêng về <b style={{ color: "var(--down)" }}>giảm</b>. Đây là bản tóm tắt chỉ báo kỹ thuật, <b>không phải dự đoán
-            chắc chắn và không phải lời khuyên đầu tư</b>.
-          </p>
+        <section id="g-indicators" style={{ display: "grid", gap: 14, scrollMarginTop: 80 }}>
+          <h2 style={h2}>Các chỉ số</h2>
           <p style={muted}>
-            Một vài thuật ngữ: <b>nến</b> là một khoảng thời gian (khung 4H thì mỗi nến là 4 giờ) với giá mở, cao, thấp,
-            đóng. <b>EMA</b> là đường giá trung bình có trọng số, nghiêng về các nến gần đây. <b>Khung lớn</b> là khung
-            dài hơn khung bạn đang xem, dùng để nhìn bức tranh rộng hơn.
+            Các chỉ số kỹ thuật mà các tiêu chí bên dưới sử dụng. Mỗi <b>nến</b> là một khoảng thời gian (khung 4H thì mỗi nến
+            là 4 giờ) với giá Mở, Cao, Thấp, Đóng và khối lượng. Nến xanh: Đóng ≥ Mở; nến đỏ: Đóng &lt; Mở. Nếu không ghi khác,
+            chỉ số được tính trên giá Đóng.
           </p>
+          <Indicator name={`EMA (đường trung bình động hàm mũ): ${ef}, ${es}`}
+            what={`Giá trung bình của n nến gần nhất, trong đó nến càng gần càng được tính nặng hơn, nên EMA bám giá nhanh hơn trung bình thường. Trang dùng ${ef} (nhanh) và ${es} (chậm).`}
+            f={"k = 2 ÷ (n + 1)\nEMA = Đóng × k + EMA nến trước × (1 − k)\nGiá trị đầu tiên = trung bình cộng giá Đóng của n nến đầu"}
+            read={`Giá trên EMA: giá đang ở phía trên đường trung bình. ${ef} nằm trên ${es}: xu hướng gần đây mạnh hơn xu hướng dài hạn, tức xu hướng tăng; ngược lại là xu hướng giảm. ${es} cần đủ ${T.ema_slow} nến mới tính được.`} />
+          <Indicator name="MA (trung bình đơn giản)"
+            what="Trung bình cộng thông thường, mọi nến tính như nhau."
+            f={"MA(n) = (giá trị nến 1 + … + giá trị nến n) ÷ n"}
+            read="Dùng trong phần Dấu hiệu đáy: MA200 tuần (giá trung bình khoảng 4 năm) và trung bình volume 20 nến để nhận ra nến bán tháo." />
+          <Indicator name="RSI(14) (chỉ số sức mạnh tương đối)"
+            what="So độ lớn các nhịp tăng với các nhịp giảm trong khoảng 14 nến gần đây, thang 0–100."
+            f={"d = Đóng − Đóng nến trước\nTăng = d nếu d > 0, ngược lại 0  ·  Giảm = −d nếu d < 0, ngược lại 0\nTB tăng, TB giảm: lần đầu = trung bình 14 nến;\n  sau đó = (TB cũ × 13 + giá trị mới) ÷ 14\nRSI = 100 − 100 ÷ (1 + TB tăng ÷ TB giảm)"}
+            read={`Trên ${T.rsi_mid}: bên mua mạnh hơn; dưới ${T.rsi_mid}: bên bán mạnh hơn. RSI ≥ ${T.rsi_overbought} là quá mua, ≤ ${T.rsi_oversold} là quá bán (phần Dấu hiệu đáy dùng mốc 30).`} />
+          <Indicator name="MACD(12, 26, 9)"
+            what="Đo đà của giá bằng khoảng cách giữa một EMA ngắn và một EMA dài."
+            f={"Đường MACD = EMA12 − EMA26\nĐường tín hiệu = EMA9 của đường MACD\nHistogram = Đường MACD − Đường tín hiệu"}
+            read="Đường MACD trên 0: EMA ngắn nằm trên EMA dài, đà tăng. Histogram dương và lớn dần: đà tăng đang mạnh lên. Histogram âm nhưng co dần về 0: đà giảm đang yếu đi." />
+          <Indicator name="ADX(14) (chỉ số định hướng trung bình)"
+            what="Đo độ mạnh của xu hướng, không quan tâm lên hay xuống, thang 0–100."
+            f={"Lên = Cao − Cao nến trước  ·  Xuống = Thấp nến trước − Thấp\n+DM = Lên nếu Lên > Xuống và Lên > 0, ngược lại 0\n−DM = Xuống nếu Xuống > Lên và Xuống > 0, ngược lại 0\nTR = lớn nhất của (Cao − Thấp, |Cao − Đóng nến trước|, |Thấp − Đóng nến trước|)\nCộng dồn 14 kỳ: Tổng mới = Tổng cũ − Tổng cũ ÷ 14 + giá trị mới\n+DI = 100 × +DM14 ÷ TR14  ·  −DI = 100 × −DM14 ÷ TR14\nDX = 100 × |+DI − −DI| ÷ (+DI + −DI)\nADX = (ADX cũ × 13 + DX) ÷ 14, giá trị đầu = trung bình 14 DX đầu"}
+            read={`ADX dưới ${T.adx_trend_min}: giá đi ngang, kết luận luôn là "Đi ngang". Từ ${T.adx_trend_min} đến 40: có xu hướng. Trên 40: xu hướng rất mạnh.`} />
+          <Indicator name="Volume (khối lượng)"
+            what="Số coin được mua bán trong một nến."
+            f={`Tỉ lệ volume = Tổng volume nến xanh ÷ Tổng volume nến đỏ\n(trong ${T.vol_lookback} nến gần nhất)`}
+            read={`Tỉ lệ ≥ ${T.vol_ratio}×: bên mua áp đảo; ≤ 1 ÷ ${T.vol_ratio}: bên bán áp đảo. Giá tăng mà volume nhỏ thì dễ là nhịp tăng yếu.`} />
+          <Indicator name="Đỉnh, đáy (pivot)"
+            what="Các điểm giá quay đầu, dùng để đọc cấu trúc giá."
+            f={`Đỉnh = nến có giá Cao lớn nhất trong ${T.pivot_window} nến trước và ${T.pivot_window} nến sau nó\nĐáy = nến có giá Thấp nhỏ nhất trong ${T.pivot_window} nến trước và ${T.pivot_window} nến sau nó`}
+            read={`Cần thêm ${T.pivot_window} nến sau mới xác nhận được, nên đỉnh/đáy mới nhất luôn trễ ${T.pivot_window} nến. Đỉnh sau cao hơn đỉnh trước (HH) và đáy sau cao hơn đáy trước (HL) là cấu trúc tăng.`} />
+          <Indicator name="Open Interest (OI, hợp đồng mở)"
+            what="Tổng giá trị (USD) các hợp đồng futures đang mở trên Binance. Mỗi hợp đồng có một bên long và một bên short."
+            f={`% thay đổi OI = (OI hiện tại ÷ OI ${T.vol_lookback} kỳ trước − 1) × 100`}
+            read="OI tăng: tiền mới đang vào vị thế. OI tăng cùng lúc giá tăng: dòng tiền mới ủng hộ đà tăng. OI giảm: các vị thế đang đóng lại (chốt lời hoặc bị thanh lý)." />
+          <Indicator name="Funding rate (phí funding)"
+            what="Phí trả định kỳ mỗi 8 giờ giữa phe long và phe short của hợp đồng vĩnh cửu, để giá futures bám sát giá spot."
+            f={"Funding > 0: long trả cho short  ·  Funding < 0: short trả cho long\nPhí mỗi lần = giá trị vị thế × funding"}
+            read={`Dương nhẹ (≤ ${T.funding_ok_max}%) là bình thường khi thị trường tăng. Từ ${T.funding_hot}% trở lên: phe long quá đông, dễ bị xả. Âm từ −${T.funding_ok_max}% trở xuống: phe short đông, có thể bị ép (short squeeze).`} />
         </section>
 
-        <section id="g-score" style={{ scrollMarginTop: 80 }}>
-          <h2 style={h2}>Điểm được tính thế nào?</h2>
-          <p style={p}>
-            Mỗi tiêu chí cho một <b>tín hiệu</b>: <C>+1</C> là tăng rõ, <C>+0.5</C> là tăng một phần, <C>0</C> là trung tính,
-            <C>−0.5</C> và <C>−1</C> tương tự cho phía giảm. Tiêu chí nào không có dữ liệu (ví dụ coin không có hợp đồng
-            futures) sẽ ghi "Thiếu dữ liệu" và <b>không được tính</b>, thay vì bị coi là 0.
-          </p>
-          <p style={p}>Mỗi tiêu chí có một <b>trọng số</b> (độ quan trọng). Điểm cuối cùng là trung bình có trọng số:</p>
-          <p style={{ ...p, fontFamily: "var(--font-mono)", fontSize: 14, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
-            Điểm = 100 × Σ(trọng số × tín hiệu) ÷ Σ(trọng số của các tiêu chí có dữ liệu)
-          </p>
-          <p style={p}>
-            Ví dụ: chỉ có 2 tiêu chí, trọng số 20 với tín hiệu +1 và trọng số 10 với tín hiệu −0.5. Điểm = 100 × (20 − 5) ÷ 30 = <b>+50</b>.
-          </p>
-          <p style={p}>Từ điểm ra kết luận:</p>
-          <ul style={ul}>
-            <li><b>≥ +{T.score_strong}</b>: Xu hướng tăng mạnh · <b>≥ +{T.score_lean}</b>: Nghiêng tăng</li>
-            <li><b>≤ −{T.score_strong}</b>: Xu hướng giảm mạnh · <b>≤ −{T.score_lean}</b>: Nghiêng giảm</li>
-            <li>Ở giữa: Trung tính</li>
-            <li>
-              <b>Ngoại lệ "Đi ngang":</b> nếu chỉ báo <b>ADX(14)</b> dưới <b>{T.adx_trend_min}</b>, kết luận luôn là "Đi ngang,
-              chưa có xu hướng", bất kể điểm. ADX đo <i>độ mạnh</i> của xu hướng (không quan tâm lên hay xuống); ADX thấp
-              nghĩa là giá đang lình xình, và các tín hiệu xu hướng lúc đó rất dễ sai.
-            </li>
-          </ul>
-        </section>
 
         <section id="g-criteria" style={{ display: "grid", gap: 14, scrollMarginTop: 80 }}>
-          <h2 style={h2}>8 tiêu chí</h2>
+          <h2 style={h2}>Các tiêu chí</h2>
           <p style={muted}>
-            Mỗi tiêu chí có một ví dụ minh hoạ. Giá trong ví dụ là giá giả lập để thấy rõ từng trường hợp (chu kỳ EMA cũng
+            Mỗi tiêu chí cho một tín hiệu từ −1 (giảm) đến +1 (tăng); cách gộp chúng thành điểm nằm ở mục "Cách tính điểm" bên
+            dưới. Mỗi tiêu chí có một ví dụ minh hoạ. Giá trong ví dụ là giá giả lập để thấy rõ từng trường hợp (chu kỳ EMA cũng
             được rút ngắn cho vừa khung hình), nhưng mọi chỉ báo và tín hiệu trong ví dụ đều được tính bằng đúng quy tắc trang
             đang dùng.
           </p>
@@ -261,6 +278,33 @@ export default function Guide({ onClose }) {
             </ul>
             <p style={muted}>Lưu ý: giá thường quét qua cụm thanh lý rồi <b>đảo chiều</b>, nên đây là nơi giá có thể tới, không phải nơi giá sẽ dừng lại.</p>
           </Criterion>
+        </section>
+
+        <section id="g-score" style={{ scrollMarginTop: 80 }}>
+          <h2 style={h2}>Cách tính điểm</h2>
+          <p style={p}>
+            Mỗi tiêu chí cho một <b>tín hiệu</b>: <C>+1</C> là tăng rõ, <C>+0.5</C> là tăng một phần, <C>0</C> là trung tính,
+            <C>−0.5</C> và <C>−1</C> tương tự cho phía giảm. Tiêu chí nào không có dữ liệu (ví dụ coin không có hợp đồng
+            futures) sẽ ghi "Thiếu dữ liệu" và <b>không được tính</b>, thay vì bị coi là 0.
+          </p>
+          <p style={p}>Mỗi tiêu chí có một <b>trọng số</b> (độ quan trọng). Điểm cuối cùng là trung bình có trọng số:</p>
+          <p style={{ ...p, fontFamily: "var(--font-mono)", fontSize: 14, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
+            Điểm = 100 × Σ(trọng số × tín hiệu) ÷ Σ(trọng số của các tiêu chí có dữ liệu)
+          </p>
+          <p style={p}>
+            Ví dụ: chỉ có 2 tiêu chí, trọng số 20 với tín hiệu +1 và trọng số 10 với tín hiệu −0.5. Điểm = 100 × (20 − 5) ÷ 30 = <b>+50</b>.
+          </p>
+          <p style={p}>Từ điểm ra kết luận:</p>
+          <ul style={ul}>
+            <li><b>≥ +{T.score_strong}</b>: Xu hướng tăng mạnh · <b>≥ +{T.score_lean}</b>: Nghiêng tăng</li>
+            <li><b>≤ −{T.score_strong}</b>: Xu hướng giảm mạnh · <b>≤ −{T.score_lean}</b>: Nghiêng giảm</li>
+            <li>Ở giữa: Trung tính</li>
+            <li>
+              <b>Ngoại lệ "Đi ngang":</b> nếu chỉ báo <b>ADX(14)</b> dưới <b>{T.adx_trend_min}</b>, kết luận luôn là "Đi ngang,
+              chưa có xu hướng", bất kể điểm. ADX đo <i>độ mạnh</i> của xu hướng (không quan tâm lên hay xuống); ADX thấp
+              nghĩa là giá đang lình xình, và các tín hiệu xu hướng lúc đó rất dễ sai.
+            </li>
+          </ul>
         </section>
 
         <section id="g-warn" style={{ scrollMarginTop: 80 }}>

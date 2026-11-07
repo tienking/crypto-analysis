@@ -13,10 +13,12 @@ The analysis UI is in Vietnamese.
 ## How it works
 
 1. **Market chart** — a TradingView candle chart (1H) for the coin pairs set in Admin.
-   The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): what
-   the page does, how the score and verdict are computed, each of the 8 criteria (why it
-   exists, exact rules, and an **illustrated example** with a chart, how to read it and a
-   worked calculation), the warnings, where the weights come from, the bottom signals and the limits. Its
+   The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): the
+   indicators (EMA, MA, RSI, MACD, ADX, volume, pivots, open interest, funding: description,
+   formula as computed in `analysis/indicators.py`, how to read it), each of the 8 criteria
+   (description, exact rules, and an **illustrated example** with a chart, how to read it and
+   a worked calculation), how the score and verdict are computed, the warnings, where the
+   weights come from, the bottom signals and the limits. Its
    thresholds and the current weights are read from `/analysis/config`, so the text always
    matches what the server computes. The example prices are made up, but every indicator and
    signal in them is computed with the server's rules (`guideData.js` ports EMA, RSI, MACD and

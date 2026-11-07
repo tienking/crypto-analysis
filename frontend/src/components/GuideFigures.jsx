@@ -95,7 +95,7 @@ function TrendPanel({ set, x0, y0, w, h, title, fastName, slowName, priceColor =
   );
 }
 
-const Read = ({ children }) => (<><div style={tag}>Đọc biểu đồ này thế nào</div><p style={p}>{children}</p></>);
+const Read = ({ children }) => (<><div style={tag}>Cách đọc</div><p style={p}>{children}</p></>);
 const Calc = ({ children }) => (<><div style={tag}>Ví dụ bằng số</div><div style={{ ...p, display: "grid", gap: 4 }}>{children}</div></>);
 
 // ── 1. Higher timeframe ─────────────────────────────────────────────────────────
