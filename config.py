@@ -21,14 +21,14 @@ MONGODB_URL = _require("MONGODB_URL")
 
 # Chatbot providers. Active provider + per-provider model are stored in MongoDB
 # (settings type="ai"); the env vars below are API keys + seed defaults.
-XAI_API_KEY = os.getenv("XAI_API_KEY")
-XAI_BASE_URL = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = os.getenv("GROK_MODEL", "grok-3")          # seed default
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")  # seed default
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")  # seed default
 
-AI_PROVIDER = os.getenv("AI_PROVIDER", "grok")          # seed default: grok | gemini
+AI_PROVIDER = os.getenv("AI_PROVIDER", "deepseek")      # seed default: deepseek | gemini
 
 # Admin auth. JWT_SECRET is mandatory — a guessable secret lets anyone forge admin
 # tokens, so refuse to start without it.

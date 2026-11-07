@@ -75,7 +75,7 @@ export default function ChatPopup({ analysis }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)" }} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>Crypto AI</span>
-              {provider && <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "capitalize" }}>· {provider}</span>}
+              {provider && <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "capitalize" }}>· {provider === "deepseek" ? "DeepSeek" : provider}</span>}
             </div>
             <button onClick={() => setOpen(false)} aria-label="Đóng" style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
           </div>

@@ -174,7 +174,7 @@ function Dashboard({ token, onLogout }) {
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>Active provider</p>
               <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-                {["grok", "gemini"].map(p => (
+                {["deepseek", "gemini"].map(p => (
                   <button key={p} onClick={() => setAi({ ...ai, provider: p })}
                     style={{
                       flex: 1, padding: "10px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600,
@@ -183,15 +183,15 @@ function Dashboard({ token, onLogout }) {
                       background: ai.provider === p ? "var(--accent-dim)" : "transparent",
                       color: ai.provider === p ? "var(--accent)" : "var(--text-muted)",
                     }}>
-                    {p === "grok" ? "Grok (xAI)" : "Gemini (Google)"}
+                    {p === "deepseek" ? "DeepSeek" : "Gemini (Google)"}
                   </button>
                 ))}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 5 }}>Grok model</label>
-                  <input value={ai.grok_model} onChange={e => setAi({ ...ai, grok_model: e.target.value })}
-                    placeholder="grok-3" style={{ ...inp, fontFamily: "var(--font-mono)" }} />
+                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 5 }}>DeepSeek model</label>
+                  <input value={ai.deepseek_model} onChange={e => setAi({ ...ai, deepseek_model: e.target.value })}
+                    placeholder="deepseek-flash" style={{ ...inp, fontFamily: "var(--font-mono)" }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 5 }}>Gemini model</label>

@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGODB_URL, ADMIN_USERNAME, ADMIN_PASSWORD, AI_PROVIDER, GROK_MODEL, GEMINI_MODEL
+from config import MONGODB_URL, ADMIN_USERNAME, ADMIN_PASSWORD, AI_PROVIDER, DEEPSEEK_MODEL, GEMINI_MODEL
 
 client = AsyncIOMotorClient(MONGODB_URL)
 db = client["cryptonews"]
@@ -16,7 +16,7 @@ DEFAULT_COINS = [
     {"label": "LTCUSDT", "symbol": "MEXC:LTCUSDT"},
 ]
 
-DEFAULT_AI = {"provider": AI_PROVIDER, "grok_model": GROK_MODEL, "gemini_model": GEMINI_MODEL}
+DEFAULT_AI = {"provider": AI_PROVIDER, "deepseek_model": DEEPSEEK_MODEL, "gemini_model": GEMINI_MODEL}
 
 
 # ── Settings: coins / AI / admin (seeded on first run) ─────────────────────────
@@ -49,12 +49,12 @@ async def set_admin_password(hashed_password: str):
     await settings_col.update_one({"type": "admin"}, {"$set": {"hashed_password": hashed_password}}, upsert=True)
 
 async def get_ai_settings():
-    d = await settings_col.find_one({"type": "ai"}, {"_id": 0})
-    if not d:
-        return DEFAULT_AI
+    d = await settings_col.find_one({"type": "ai"}, {"_id": 0}) or DEFAULT_AI
+    provider = d.get("provider", "deepseek")
     return {
-        "provider": d.get("provider", "grok"),
-        "grok_model": d.get("grok_model", GROK_MODEL),
+        # Grok was replaced by DeepSeek (v2.3.0): an old "grok" setting falls back to DeepSeek.
+        "provider": provider if provider in ("deepseek", "gemini") else "deepseek",
+        "deepseek_model": d.get("deepseek_model", DEEPSEEK_MODEL),
         "gemini_model": d.get("gemini_model", GEMINI_MODEL),
     }
 

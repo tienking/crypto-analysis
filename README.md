@@ -50,7 +50,7 @@ The analysis UI is in Vietnamese.
 3. **Settings** — visitors can change every threshold and weight; they are kept in their
    browser (`localStorage`: `ca-thresholds`, `ca-weights`, `ca-last`) and sent with each
    request. The analysis refreshes every 60 s (can be turned off).
-4. **AI assistant** (bottom-right) — Grok (xAI) or Gemini (Google), switchable in Admin. Each
+4. **AI assistant** (bottom-right) — DeepSeek or Gemini (Google), switchable in Admin. Each
    message sends the coin, timeframe, thresholds and weights on screen; the **server reruns the
    analysis** (15 s cache) and gives the result to the model as context, so the browser cannot
    feed it made-up numbers.
@@ -71,7 +71,7 @@ US IPs (HTTP 451): the server must run outside the US.
 |-------|------|
 | Backend | Python / FastAPI · Uvicorn (port **8003**) |
 | Analysis | numpy (no pandas / TA library) · httpx async Binance client with host fallback and a 15 s TTL cache |
-| Chatbot | Grok (xAI) or Gemini (Google), grounded in the analysis on screen |
+| Chatbot | DeepSeek (`deepseek-flash` / `deepseek-v4-pro`) or Gemini (Google), grounded in the analysis on screen |
 | Database | MongoDB (Motor) — db `cryptonews` (old name kept, so no data move), collection `settings` |
 | Frontend | React 19 + Vite (base `/projects/crypto-analysis/`) · Inter + JetBrains Mono · TradingView widget |
 | Hosting | Hostinger VPS (shared), Nginx, systemd, GitLab CI/CD |
@@ -91,8 +91,8 @@ crypto-analysis/
 │   ├── criteria.py          # Candles, Context, the 8 crit_* functions, score(), verdict
 │   ├── liquidation.py       # Pure numpy liquidation-map model + pull()
 │   └── service.py           # analyze(): parallel fetch → Context → score → JSON (no NaN)
-├── ai.py                    # Chat dispatcher → Grok or Gemini per AI settings
-├── grok.py / gemini.py      # Chat clients
+├── ai.py                    # Chat dispatcher → DeepSeek or Gemini per AI settings
+├── deepseek.py / gemini.py  # Chat clients
 ├── auth.py                  # Admin JWT + bcrypt
 ├── database.py              # Motor: settings (coins / AI / admin), seed defaults
 ├── config.py                # Env loader (Mongo, AI keys, JWT_SECRET, ADMIN_*)

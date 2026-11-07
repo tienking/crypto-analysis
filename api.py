@@ -72,7 +72,7 @@ async def analysis(body: AnalyzeRequest, request: Request):
     return await _run_analysis(request, body)
 
 
-# ── Chatbot (Grok / Gemini), grounded in the analysis the visitor is looking at ─
+# ── Chatbot (DeepSeek / Gemini), grounded in the analysis the visitor is looking at ─
 
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=2000)
@@ -210,8 +210,8 @@ async def admin_set_coins(data: CoinsUpdate, _: str = Depends(verify_admin)):
 
 
 class AISettingsUpdate(BaseModel):
-    provider: str                # "grok" | "gemini"
-    grok_model: str
+    provider: str                # "deepseek" | "gemini"
+    deepseek_model: str
     gemini_model: str
 
 @router.get("/api/crypto-analysis/admin/ai-settings")
@@ -220,8 +220,9 @@ async def admin_get_ai(_: str = Depends(verify_admin)):
 
 @router.put("/api/crypto-analysis/admin/ai-settings")
 async def admin_set_ai(data: AISettingsUpdate, _: str = Depends(verify_admin)):
-    provider = data.provider if data.provider in ("grok", "gemini") else "grok"
-    await set_ai_settings({"provider": provider, "grok_model": data.grok_model, "gemini_model": data.gemini_model})
+    provider = data.provider if data.provider in ("deepseek", "gemini") else "deepseek"
+    await set_ai_settings({"provider": provider, "deepseek_model": data.deepseek_model.strip() or "deepseek-flash",
+                           "gemini_model": data.gemini_model.strip() or "gemini-2.5-flash"})
     return {"ok": True}
 
 
