@@ -12,7 +12,7 @@ const C = {
   accent: "var(--accent)",
 };
 const mono = { fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" };
-const p = { fontSize: 14, lineHeight: 1.65, margin: "0 0 8px", maxWidth: "72ch" };
+const p = { fontSize: 14, lineHeight: 1.65, margin: "0 0 8px" };
 const tag = { display: "inline-block", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", margin: "10px 0 4px" };
 const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v);
 const f1 = v => v.toFixed(1), f2 = v => v.toFixed(2);

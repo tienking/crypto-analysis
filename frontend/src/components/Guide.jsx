@@ -11,7 +11,7 @@ const HIGHER = [["5m", "30m"], ["15m", "1H"], ["30m", "2H"], ["1H", "4H"], ["4H"
 
 const h2 = { fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", margin: "0 0 10px" };
 const h3 = { fontSize: 16, fontWeight: 700, margin: "0 0 6px" };
-const p = { fontSize: 15, lineHeight: 1.65, color: "var(--text)", margin: "0 0 10px", maxWidth: "72ch" };
+const p = { fontSize: 15, lineHeight: 1.65, color: "var(--text)", margin: "0 0 10px" };
 const muted = { ...p, color: "var(--text-muted)", fontSize: 14 };
 const ul = { ...p, paddingLeft: 20, display: "grid", gap: 4 };
 const code = { fontFamily: "var(--font-mono)", fontSize: 13, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap" };
