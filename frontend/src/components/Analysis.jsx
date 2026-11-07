@@ -4,7 +4,7 @@ import { analyzeCoin, fetchAnalysisConfig } from "../lib/api";
 // Coin trend score: 8 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
 // UI text is Vietnamese. API data is only ever rendered as text, never as HTML.
 
-const TIMEFRAMES = [["5m", "5m"], ["15m", "15m"], ["1h", "1H"], ["4h", "4H"], ["12h", "12H"], ["1d", "1D"]];
+const TIMEFRAMES = [["5m", "5m"], ["15m", "15m"], ["30m", "30m"], ["1h", "1H"], ["4h", "4H"], ["12h", "12H"], ["1d", "1D"]];
 const REFRESH_MS = 60000;
 const VERDICT_COLOR = { strong_up: "var(--up)", lean_up: "var(--up)", strong_down: "var(--down)", lean_down: "var(--down)", neutral: "var(--warn)", ranging: "var(--warn)" };
 const PILL = { bull: "Tăng", bear: "Giảm", neutral: "Trung tính", na: "Thiếu dữ liệu" };
@@ -152,10 +152,11 @@ export default function Analysis({ request, onAnalyzed }) {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)", paddingRight: 6 }}>/USDT</span>
           <button type="submit" style={{ background: "var(--accent)", color: "#000", border: 0, borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "var(--font-display)", whiteSpace: "nowrap", flexShrink: 0 }}>Phân tích</button>
         </form>
-        <div role="group" aria-label="Khung thời gian" style={{ display: "inline-flex", background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: 3 }}>
+        {/* Narrow screens: full width, equal columns, so all 7 timeframes always fit on one row. */}
+        <div role="group" aria-label="Khung thời gian" style={{ display: narrow ? "grid" : "inline-flex", gridTemplateColumns: `repeat(${TIMEFRAMES.length}, minmax(0, 1fr))`, flex: narrow ? "1 1 100%" : undefined, background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: 3 }}>
           {TIMEFRAMES.map(([key, text]) => (
             <button key={key} type="button" aria-pressed={tf === key} onClick={() => { setTf(key); run({ tf: key }); }}
-              style={{ border: 0, padding: "7px 12px", borderRadius: 7, fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 13, cursor: "pointer", background: tf === key ? "var(--text)" : "transparent", color: tf === key ? "var(--bg)" : "var(--text-muted)" }}>
+              style={{ border: 0, padding: narrow ? "7px 0" : "7px 12px", borderRadius: 7, whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 13, cursor: "pointer", background: tf === key ? "var(--text)" : "transparent", color: tf === key ? "var(--bg)" : "var(--text-muted)" }}>
               {text}
             </button>
           ))}

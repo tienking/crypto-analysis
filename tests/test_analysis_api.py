@@ -93,7 +93,7 @@ def test_downtrend_scores_negative(client):
     assert client(-0.004).post(URL, json={"symbol": "ETH", "timeframe": "4h"}).json()["score"] < -20
 
 
-@pytest.mark.parametrize("tf,higher,liq_period", [("5m", "30m", "5m"), ("12h", "3d", "2h")])
+@pytest.mark.parametrize("tf,higher,liq_period", [("5m", "30m", "5m"), ("30m", "2h", "30m"), ("12h", "3d", "2h")])
 def test_new_timeframes(client, tf, higher, liq_period):
     d = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": tf}).json()
     assert d["timeframe"] == tf and d["higher_timeframe"] == higher
