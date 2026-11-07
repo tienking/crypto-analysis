@@ -4,7 +4,7 @@ import { analyzeCoin, fetchAnalysisConfig } from "../lib/api";
 // Coin trend score: 8 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
 // UI text is Vietnamese. API data is only ever rendered as text, never as HTML.
 
-const TIMEFRAMES = [["15m", "15m"], ["1h", "1H"], ["4h", "4H"], ["1d", "1D"]];
+const TIMEFRAMES = [["5m", "5m"], ["15m", "15m"], ["1h", "1H"], ["4h", "4H"], ["12h", "12H"], ["1d", "1D"]];
 const REFRESH_MS = 60000;
 const VERDICT_COLOR = { strong_up: "var(--up)", lean_up: "var(--up)", strong_down: "var(--down)", lean_down: "var(--down)", neutral: "var(--warn)", ranging: "var(--warn)" };
 const PILL = { bull: "Tăng", bear: "Giảm", neutral: "Trung tính", na: "Thiếu dữ liệu" };

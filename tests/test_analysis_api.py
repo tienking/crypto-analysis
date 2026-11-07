@@ -93,6 +93,17 @@ def test_downtrend_scores_negative(client):
     assert client(-0.004).post(URL, json={"symbol": "ETH", "timeframe": "4h"}).json()["score"] < -20
 
 
+@pytest.mark.parametrize("tf,higher,liq_period", [("5m", "30m", "5m"), ("12h", "3d", "2h")])
+def test_new_timeframes(client, tf, higher, liq_period):
+    d = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": tf}).json()
+    assert d["timeframe"] == tf and d["higher_timeframe"] == higher
+    assert d["liquidation"]["period"] == liq_period
+
+
+def test_unknown_timeframe_rejected(client):
+    assert client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "2h"}).status_code == 422
+
+
 def test_btc_context_is_na_for_btc(client):
     d = client(0.004).post(URL, json={"symbol": "BTCUSDT"}).json()
     btc = next(x for x in d["criteria"] if x["id"] == "btc")

@@ -20,7 +20,7 @@ async def health():
 
 # ── Coin analysis (8 weighted criteria on Binance data) ────────────────────────
 
-Timeframe = Literal["15m", "1h", "4h", "1d"]
+Timeframe = Literal["5m", "15m", "1h", "4h", "12h", "1d"]
 
 class AnalyzeRequest(BaseModel):
     symbol: str = Field(..., min_length=2, max_length=20)

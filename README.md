@@ -22,7 +22,7 @@ The analysis UI is in Vietnamese.
 
    | Criterion | Weight | Bullish when |
    |---|---|---|
-   | Higher-timeframe agreement | 20 | EMA trend up on the higher timeframe (15m→1h, 1h→4h, 4h→1d, 1d→1w) |
+   | Higher-timeframe agreement | 20 | EMA trend up on the higher timeframe (5m→30m, 15m→1h, 1h→4h, 4h→1d, 12h→3d, 1d→1w) |
    | EMA trend | 20 | Price > EMA50 > EMA200 |
    | Price structure | 15 | Higher high + higher low, or a break of the last pivot high |
    | Momentum | 10 | RSI ≥ 50 and rising; MACD histogram positive and widening |
@@ -38,8 +38,8 @@ The analysis UI is in Vietnamese.
    within 1% (likely sweep then reversal).
 
    **Liquidation map** (`analysis/liquidation.py`): Binance publishes none, so it is a model, like
-   the public heatmaps. Open-interest history (500 points of `openInterestHist`: 15m for the 15m
-   timeframe, 1h for 1h/4h, 4h for 1d) is aligned with futures candles. Each OI rise = new
+   the public heatmaps. Open-interest history (500 points of `openInterestHist`, Binance keeps 30 days:
+   5m for 5m, 15m for 15m, 1h for 1h/4h, 2h for 12h, 4h for 1d) is aligned with futures candles. Each OI rise = new
    positions at the candle's typical price, one long and one short per contract, spread over
    10x/25x/50x/100x (30/30/25/15%); a long liquidates near `entry × (1 − 1/L + 0.4%)`, a short
    near `entry × (1 + 1/L − 0.4%)`. A level is removed once a later candle trades through it; an
@@ -132,7 +132,7 @@ crypto-analysis/
 | GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
 | GET/PUT | `/api/crypto-analysis/admin/ai-settings` | Read / save provider + per-provider model |
 
-`timeframe` ∈ `15m | 1h | 4h | 1d`; the symbol is normalised to `{BASE}USDT`.
+`timeframe` ∈ `5m | 15m | 1h | 4h | 12h | 1d`; the symbol is normalised to `{BASE}USDT`.
 
 > **Admin:** seeded on first run from `ADMIN_USERNAME` (default `admin`) /
 > `ADMIN_PASSWORD` env. If `ADMIN_PASSWORD` is unset, a random one is generated and

@@ -3,15 +3,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-TIMEFRAMES = ("15m", "1h", "4h", "1d")
-HIGHER_TF = {"15m": "1h", "1h": "4h", "4h": "1d", "1d": "1w"}
+TIMEFRAMES = ("5m", "15m", "1h", "4h", "12h", "1d")
+# Higher timeframe = roughly 4-7x the current one (Binance has 30m and 3d candles).
+HIGHER_TF = {"5m": "30m", "15m": "1h", "1h": "4h", "4h": "1d", "12h": "3d", "1d": "1w"}
 QUOTE = "USDT"
 BTC_SYMBOL = "BTCUSDT"
 CHART_CANDLES = 120
 CACHE_TTL_SECONDS = 15
 # Open-interest period behind the liquidation map (500 points; Binance keeps 30 days):
-# 15m -> ~5 days, 1h/4h -> ~21 days, 1d -> 30 days.
-LIQ_PERIOD = {"15m": "15m", "1h": "1h", "4h": "1h", "1d": "4h"}
+# 5m -> ~1.7 days, 15m -> ~5 days, 1h/4h -> ~21 days, 12h (2h points) and 1d (4h) -> 30 days.
+LIQ_PERIOD = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "1h", "12h": "2h", "1d": "4h"}
 
 
 class Thresholds(BaseModel):
