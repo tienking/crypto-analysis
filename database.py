@@ -103,8 +103,27 @@ async def get_weights_admin() -> dict:
                      "can_rollback": rollback_target(sets) is not None}
     runs = [r async for r in bt_db["runs"].find().sort("started_at", -1).limit(10)]
     days = await bt_db["market_5m"].count_documents({"symbol": "BTCUSDT", "oi": {"$exists": True}})
+    done = [r async for r in bt_db["runs"].find({"status": "done"}, {"started_at": 1, "groups": 1})
+            .sort("started_at", -1).limit(104)]
     return {"locked": bool(state.get("locked")), "groups": groups,
-            "runs": [{**r, "_id": str(r["_id"])} for r in runs], "oi_days": days}
+            "runs": [{**r, "_id": str(r["_id"])} for r in runs], "oi_days": days,
+            "history": run_history(done)}
+
+
+def run_history(runs: list[dict]) -> list[dict]:
+    """Chart points, oldest first: per group, the test IC of the weights in effect after the
+    run (the proposal if it was applied, else the current set) and whether it was applied."""
+    out = []
+    for r in sorted(runs, key=lambda r: r["started_at"]):
+        point = {"started_at": r["started_at"]}
+        for g in GROUPS:
+            x = (r.get("groups") or {}).get(g)
+            if x and x.get("test_ic_current") is not None:
+                applied = bool(x.get("applied"))
+                point[g] = {"ic": x["test_ic_proposed"] if applied else x["test_ic_current"],
+                            "applied": applied, "before": x["test_ic_current"]}
+        out.append(point)
+    return out
 
 
 async def set_weights_locked(locked: bool):

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword,
   adminGetWeights, adminLockWeights, adminRollbackWeights } from "./lib/api";
+import RunsChart from "./components/RunsChart";
 
 const SITE_URL = "/projects/crypto-analysis/";
 
@@ -168,6 +169,16 @@ function WeightsAdmin({ token, flash }) {
       </div>
 
       <div style={card}>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>Backtest score per run</p>
+        <p style={{ ...small, margin: "2px 0 12px", lineHeight: 1.5 }}>
+          Test IC of the weights in use after each run: how well the score lined up with the next 5 candles on
+          the newer half of the data. ≤ 0 = no edge · 0.03–0.08 = small but real · above 0.1 = suspicious (likely luck).
+          Consecutive runs share most of their data, so look at the trend, not one week's change.
+        </p>
+        <RunsChart history={d.history || []} />
+      </div>
+
+      <div style={card}>
         <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Recent runs</p>
         {d.runs.length === 0 ? <p style={small}>The first weekly run has not happened yet.</p> : (
           <div style={{ overflowX: "auto" }}>
@@ -176,7 +187,7 @@ function WeightsAdmin({ token, flash }) {
                 <th style={{ padding: "4px 6px 4px 0" }}>Started</th><th>Group</th><th>Test IC now → proposed</th><th>Result</th>
               </tr></thead>
               <tbody>
-                {d.runs.flatMap(r => (r.groups ? GROUPS.map(([g, title]) => {
+                {d.runs.flatMap(r => (r.groups ? GROUPS.filter(([g]) => r.groups[g]).map(([g, title]) => {
                   const x = r.groups[g];
                   return (
                     <tr key={r._id + g} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>

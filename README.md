@@ -87,7 +87,9 @@ The analysis UI is in Vietnamese.
    feed it made-up numbers.
 5. **Admin** (`/projects/crypto-analysis/admin`, JWT login) — chart coin pairs, AI provider/model,
    password (MongoDB `settings` collection), and **Backtest weights**: the active set per
-   group, recent runs (test IC now → proposed, applied or why not), **Lock** (runs still
+   group, a **chart of every run** (test IC of the weights in effect after the run, per group;
+   filled dot = new weights applied, hollow = kept; hover or arrow keys for the values),
+   recent runs (test IC now → proposed, applied or why not), **Lock** (runs still
    propose but apply nothing) and **Roll back** (re-activate the previous set of a group).
 
 ### Backtest pipeline
@@ -183,6 +185,7 @@ crypto-analysis/
         ├── components/
         │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
         │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, liquidation map, criteria, settings
+        │   ├── RunsChart.jsx    # Admin: test IC per backtest run (SVG line chart, tooltip, hidden table)
         │   └── ChatPopup.jsx    # AI assistant (bottom-right)
         └── lib/api.js           # API client
 ```
@@ -201,7 +204,7 @@ crypto-analysis/
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
 | GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
 | GET/PUT | `/api/crypto-analysis/admin/ai-settings` | Read / save provider + per-provider model |
-| GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, lock state, days of OI archived |
+| GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, `history` (chart points of the last 104 completed runs), lock state, days of OI archived |
 | PUT | `/api/crypto-analysis/admin/weights/lock` | `{locked}` |
 | POST | `/api/crypto-analysis/admin/weights/rollback` | `{group: short | long}` → re-activate the previous set (400 if none) |
 

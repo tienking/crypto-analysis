@@ -139,3 +139,18 @@ def test_engine_price_rows_use_the_app_criteria():
     assert r["btc"] is None                                     # analysing BTC itself
     assert all((x["t"] // (4 * 3_600_000)) % engine.H == 0 for x in rows)   # shared absolute grid
     assert all(-1 <= x["trend"] <= 1 for x in rows if x["trend"] is not None)
+
+
+def test_run_history_points_follow_the_weights_in_effect():
+    import database
+    t = lambda d: datetime(2026, 11, d)  # noqa: E731
+    runs = [
+        {"started_at": t(15), "groups": {"short": {"applied": True, "test_ic_current": 0.01, "test_ic_proposed": 0.02},
+                                          "long": {"applied": False, "test_ic_current": 0.07, "test_ic_proposed": 0.071}}},
+        {"started_at": t(8), "groups": {"long": {"applied": False, "test_ic_current": 0.06}}},
+    ]
+    h = database.run_history(runs)
+    assert [p["started_at"] for p in h] == [t(8), t(15)]                     # oldest first
+    assert "short" not in h[0] and h[0]["long"] == {"ic": 0.06, "applied": False, "before": 0.06}
+    assert h[1]["short"] == {"ic": 0.02, "applied": True, "before": 0.01}   # applied -> the proposal's IC
+    assert h[1]["long"]["ic"] == 0.07                                        # kept -> the current set's IC
