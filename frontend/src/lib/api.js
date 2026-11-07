@@ -60,9 +60,9 @@ export async function adminLogin(username, password) {
   });
   if (res.status === 429) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail || "Too many failed attempts. Please try again later.");
+    throw new Error(d.detail || "Sai quá nhiều lần. Vui lòng thử lại sau.");
   }
-  if (!res.ok) throw new Error("Invalid username or password");
+  if (!res.ok) throw new Error("Sai tên đăng nhập hoặc mật khẩu");
   return res.json(); // { access_token }
 }
 
@@ -94,14 +94,14 @@ export async function adminChangePassword(token, current_password, new_password)
   const res = await fetch(`${BASE}/admin/password`, { method: "PUT", headers: authH(token), body: JSON.stringify({ current_password, new_password }) });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail || "Change failed");
+    throw new Error(d.detail || "Đổi mật khẩu thất bại");
   }
   return res.json();
 }
 
 export async function adminGetWeights(token) {
   const res = await fetch(`${BASE}/admin/weights`, { headers: authH(token) });
-  if (!res.ok) throw new Error("Failed to load weights");
+  if (!res.ok) throw new Error("Không tải được trọng số");
   return res.json();
 }
 
@@ -115,7 +115,7 @@ export async function adminRollbackWeights(token, group) {
   const res = await fetch(`${BASE}/admin/weights/rollback`, { method: "POST", headers: authH(token), body: JSON.stringify({ group }) });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail || "Rollback failed");
+    throw new Error(d.detail || "Khôi phục thất bại");
   }
   return res.json();
 }

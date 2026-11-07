@@ -9,8 +9,8 @@ const SERIES = [
   { key: "long", name: "4H – 1D", color: "#d95926" },
 ];
 const SURFACE = "var(--bg-card)";
-const fmtDay = d => new Date(String(d).endsWith("Z") ? d : d + "Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-const fmtFull = d => new Date(String(d).endsWith("Z") ? d : d + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const fmtDay = d => new Date(String(d).endsWith("Z") ? d : d + "Z").toLocaleDateString("vi-VN", { day: "numeric", month: "numeric" });
+const fmtFull = d => new Date(String(d).endsWith("Z") ? d : d + "Z").toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 const fmtIc = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(3);
 const time = d => new Date(String(d).endsWith("Z") ? d : d + "Z").getTime();
 
@@ -37,7 +37,7 @@ export default function RunsChart({ history }) {
 
   const runs = history.filter(r => SERIES.some(s => r[s.key]));
   if (!runs.length) {
-    return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>The chart appears after the first completed weekly run.</p>;
+    return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Biểu đồ sẽ hiện sau lần chạy hằng tuần đầu tiên.</p>;
   }
 
   const narrow = width < 480;
@@ -85,17 +85,17 @@ export default function RunsChart({ history }) {
           </span>
         ))}
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="var(--text-muted)" /></svg>new weights applied
+          <svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="var(--text-muted)" /></svg>áp dụng trọng số mới
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" /></svg>kept
+          <svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" /></svg>giữ nguyên
         </span>
       </div>
 
       <div ref={wrap} style={{ position: "relative", minWidth: 0, overflow: "hidden" }}
         onPointerMove={e => setActive(nearest(e.clientX))} onPointerLeave={() => setActive(null)}>
         <svg width={width} height={H} role="img" tabIndex={0} onKeyDown={onKey} onBlur={() => setActive(null)}
-          aria-label={`Test IC of the active weights after each backtest run, ${runs.length} runs. Use the arrow keys to read each run.`}
+          aria-label={`IC kiểm tra của bộ trọng số đang dùng sau mỗi lần chạy backtest, ${runs.length} lần chạy. Dùng phím mũi tên để đọc từng lần.`}
           style={{ display: "block", outline: "none" }}>
           {ticks.map(v => (
             <g key={v}>
@@ -103,7 +103,7 @@ export default function RunsChart({ history }) {
               <text x={padL - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{v === 0 ? "0" : fmtIc(v)}</text>
             </g>
           ))}
-          {lo === 0 && <text x={width - padR} y={y(0) - 5} textAnchor="end" fontSize="10" fill="var(--text-muted)">0 = no edge</text>}
+          {lo === 0 && <text x={width - padR} y={y(0) - 5} textAnchor="end" fontSize="10" fill="var(--text-muted)">0 = không có lợi thế</text>}
           {xTicks.map(i => (
             <text key={i} x={x(i)} y={H - 6} textAnchor={runs.length === 1 ? "middle" : i === 0 ? "start" : i === last ? "end" : "middle"} fontSize="11" fill="var(--text-muted)">{fmtDay(runs[i].started_at)}</text>
           ))}
@@ -135,7 +135,7 @@ export default function RunsChart({ history }) {
                 <i style={{ width: 10, height: 2, background: s.color, display: "inline-block", alignSelf: "center" }} />
                 <b style={{ fontFamily: "var(--font-mono)", color: "var(--text)" }}>{fmtIc(a[s.key].ic)}</b>
                 <span style={{ color: "var(--text-muted)" }}>
-                  {s.name} · {a[s.key].applied ? `applied (was ${fmtIc(a[s.key].before)})` : "kept"}
+                  {s.name} · {a[s.key].applied ? `đã áp dụng (trước đó ${fmtIc(a[s.key].before)})` : "giữ nguyên"}
                 </span>
               </div>
             ))}
@@ -144,13 +144,13 @@ export default function RunsChart({ history }) {
       </div>
 
       <table style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
-        <caption>Test IC of the active weights after each backtest run</caption>
-        <thead><tr><th>Run</th>{SERIES.map(s => <th key={s.key}>{s.name}</th>)}</tr></thead>
+        <caption>IC kiểm tra của bộ trọng số đang dùng sau mỗi lần chạy backtest</caption>
+        <thead><tr><th>Lần chạy</th>{SERIES.map(s => <th key={s.key}>{s.name}</th>)}</tr></thead>
         <tbody>
           {runs.map(r => (
             <tr key={r.started_at}>
               <td>{fmtFull(r.started_at)}</td>
-              {SERIES.map(s => <td key={s.key}>{r[s.key] ? `${fmtIc(r[s.key].ic)} (${r[s.key].applied ? "applied" : "kept"})` : "—"}</td>)}
+              {SERIES.map(s => <td key={s.key}>{r[s.key] ? `${fmtIc(r[s.key].ic)} (${r[s.key].applied ? "đã áp dụng" : "giữ nguyên"})` : "—"}</td>)}
             </tr>
           ))}
         </tbody>

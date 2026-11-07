@@ -220,7 +220,7 @@ def _check_login_rate(ip: str):
     entry = _login_attempts.get(ip)
     if entry and entry["locked_until"] > time.time():
         mins, secs = divmod(int(entry["locked_until"] - time.time()), 60)
-        raise HTTPException(status_code=429, detail=f"Too many failed attempts. Try again in {mins}m {secs}s.")
+        raise HTTPException(status_code=429, detail=f"Sai quá nhiều lần. Thử lại sau {mins} phút {secs} giây.")
 
 def _record_login_failure(ip: str):
     now = time.time()
@@ -242,7 +242,7 @@ async def admin_login(req: LoginRequest, request: Request):
     admin = await get_admin()
     if not admin or req.username != admin.get("username") or not check_password(req.password, admin.get("hashed_password", "")):
         _record_login_failure(ip)
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail="Sai tên đăng nhập hoặc mật khẩu")
     _login_attempts.pop(ip, None)
     return {"access_token": create_token(req.username), "token_type": "bearer"}
 
@@ -293,7 +293,7 @@ async def admin_lock_weights(data: WeightsLock, _: str = Depends(verify_admin)):
 @router.post("/api/crypto-analysis/admin/weights/rollback")
 async def admin_rollback_weights(data: WeightsRollback, _: str = Depends(verify_admin)):
     if not await rollback_weights(data.group):
-        raise HTTPException(400, "No earlier weight set to go back to")
+        raise HTTPException(400, "Không có bộ trọng số trước đó để khôi phục")
     await get_active_weights(force=True)
     return {"ok": True}
 
@@ -306,7 +306,7 @@ class PasswordChange(BaseModel):
 async def admin_change_password(data: PasswordChange, _: str = Depends(verify_admin)):
     admin = await get_admin()
     if not admin or not check_password(data.current_password, admin.get("hashed_password", "")):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+        raise HTTPException(status_code=401, detail="Mật khẩu hiện tại không đúng")
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
     await set_admin_password(hash_password(data.new_password))

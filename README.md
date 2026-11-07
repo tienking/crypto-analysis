@@ -3,7 +3,7 @@
 A coin trend scorer. A TradingView market chart sits on top; below it, any coin is scored
 from **−100 to +100** with **8 weighted technical criteria** on live Binance data, with a
 verdict, the indicators behind it, and an AI assistant that explains the analysis on screen.
-The analysis UI is in Vietnamese.
+The analysis UI and the Admin page are in Vietnamese.
 
 🔗 **Live:** [tienmai.space/projects/crypto-analysis](https://tienmai.space/projects/crypto-analysis)
 (formerly **crypto-news**, an RSS news site; the old `/projects/crypto-news/` links redirect here)
