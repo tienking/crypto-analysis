@@ -8,6 +8,9 @@ const TIMEFRAMES = [["5m", "5m"], ["15m", "15m"], ["30m", "30m"], ["1h", "1H"], 
 const REFRESH_MS = 60000;
 const VERDICT_COLOR = { strong_up: "var(--up)", lean_up: "var(--up)", strong_down: "var(--down)", lean_down: "var(--down)", neutral: "var(--warn)", ranging: "var(--warn)" };
 const PILL = { bull: "Tăng", bear: "Giảm", neutral: "Trung tính", na: "Thiếu dữ liệu" };
+// Custom weights of this visitor. null = the backtest-driven defaults chosen by the server.
+// (v2: the old "ca-weights" was also written when only a threshold changed, so it is ignored.)
+const WKEY = "ca-weights-v2";
 
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } },
@@ -51,7 +54,7 @@ export default function Analysis({ request, onAnalyzed }) {
   const [tf, setTf] = useState(last?.tf || "4h");
   const [cfg, setCfg] = useState(null);
   const [T, setT] = useState(null);
-  const [W, setW] = useState(null);
+  const [W, setW] = useState(null);       // custom weights, or null = automatic
   const [data, setData] = useState(null);
   const [status, setStatus] = useState({ kind: "", msg: "Đang tải…" });
   const [error, setError] = useState("");
@@ -64,7 +67,7 @@ export default function Analysis({ request, onAnalyzed }) {
   const run = useCallback(async (override = {}) => {
     const { symbol, tf: timeframe, T: thresholds, W: weights } = { ...current.current, ...override };
     const clean = (symbol || "").trim();
-    if (clean.replace(/[^a-z0-9]/gi, "").length < 2 || !thresholds || !weights) return;
+    if (clean.replace(/[^a-z0-9]/gi, "").length < 2 || !thresholds) return;
     const id = ++busy.current;
     setStatus({ kind: "", msg: `Đang phân tích ${clean.toUpperCase()} · ${timeframe}…` });
     setError("");
@@ -89,7 +92,9 @@ export default function Analysis({ request, onAnalyzed }) {
     loaded.current = true;
     fetchAnalysisConfig().then(c => {
       const t = { ...c.thresholds, ...(store.get("ca-thresholds") || {}) };
-      const w = { ...c.weights, ...(store.get("ca-weights") || {}) };
+      const saved = store.get(WKEY);
+      const w = saved ? { ...c.weights, ...saved } : null;
+      store.del("ca-weights");
       setCfg(c); setT(t); setW(w);
       run({ T: t, W: w });
     }).catch(() => setStatus({ kind: "err", msg: "Không tải được cấu hình" }));
@@ -119,20 +124,30 @@ export default function Analysis({ request, onAnalyzed }) {
     return () => clearInterval(t);
   }, [auto, run]);
 
+  const shownWeights = W || data?.weights || cfg?.weights;
+  // Settings inputs are uncontrolled: remount them only when values change from outside
+  // (reset, or the automatic weights of another timeframe group), never while typing.
+  const [resetN, setResetN] = useState(0);
+  const autoSig = useRef("");
+  if (!W && shownWeights) autoSig.current = JSON.stringify(shownWeights);
   const changeSetting = (group, key, raw) => {
     const v = parseFloat(raw);
     if (!isFinite(v)) return;
-    const t = group === "t" ? { ...T, [key]: v } : T;
-    const w = group === "w" ? { ...W, [key]: v } : W;
-    setT(t); setW(w);
-    store.set("ca-thresholds", t); store.set("ca-weights", w);
-    run({ T: t, W: w });
+    if (group === "t") {
+      const t = { ...T, [key]: v };
+      setT(t); store.set("ca-thresholds", t);
+      run({ T: t });
+    } else {
+      const w = { ...shownWeights, [key]: v };   // editing starts from the weights on screen
+      setW(w); store.set(WKEY, w);
+      run({ W: w });
+    }
   };
   const resetSettings = () => {
-    const t = { ...cfg.thresholds }, w = { ...cfg.weights };
-    store.del("ca-thresholds"); store.del("ca-weights");
-    setT(t); setW(w);
-    run({ T: t, W: w });
+    const t = { ...cfg.thresholds };
+    store.del("ca-thresholds"); store.del(WKEY);
+    setT(t); setW(null); setResetN(n => n + 1);
+    run({ T: t, W: null });
   };
 
   return (
@@ -202,19 +217,32 @@ export default function Analysis({ request, onAnalyzed }) {
             <h3 style={{ fontSize: 16 }}>Bảng tiêu chí</h3>
             <span style={label}>Trọng số × tín hiệu = điểm đóng góp</span>
           </div>
+          <WeightsNote info={data.weights_info} />
           <ol style={{ listStyle: "none", display: "grid", gap: 8, marginTop: 6 }}>
             {data.criteria.map(c => <Criterion key={c.id} c={c} narrow={narrow} />)}
           </ol>
         </section>
       )}
 
-      {cfg && T && W && <Settings cfg={cfg} T={T} W={W} onChange={changeSetting} onReset={resetSettings} />}
+      {cfg && T && shownWeights && <Settings formKey={`${resetN}|${autoSig.current}`} cfg={cfg} T={T} W={shownWeights} onChange={changeSetting} onReset={resetSettings} />}
 
       <p style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", maxWidth: "70ch", margin: "0 auto", lineHeight: 1.5 }}>
         Dữ liệu: Binance Spot và USDⓈ-M Futures. Công cụ chỉ đọc chỉ báo kỹ thuật, không dự đoán chắc chắn và không phải lời khuyên đầu tư.
       </p>
     </section>
   );
+}
+
+const GROUP_TEXT = { short: "khung 5m–1H", long: "khung 4H–1D" };
+
+function WeightsNote({ info }) {
+  if (!info) return null;
+  const text = info.source === "custom"
+    ? "Đang dùng trọng số bạn tự chỉnh. Bấm “Khôi phục mặc định” bên dưới để quay lại trọng số tự động."
+    : `Trọng số tự động cho ${GROUP_TEXT[info.group]}, cập nhật hằng tuần từ backtest trên 10 coin lớn`
+      + (info.updated_at ? ` · lần gần nhất ${new Date(info.updated_at + (String(info.updated_at).endsWith("Z") ? "" : "Z")).toLocaleDateString("vi-VN")}` : "")
+      + ".";
+  return <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px", lineHeight: 1.5 }}>{text}</p>;
 }
 
 function Legend({ color, text }) {
@@ -426,7 +454,7 @@ function Criterion({ c, narrow }) {
   );
 }
 
-function Settings({ cfg, T, W, onChange, onReset }) {
+function Settings({ formKey, cfg, T, W, onChange, onReset }) {
   const field = (group, key, text, value) => (
     <label key={`${group}-${key}`} style={{ display: "grid", gap: 4, fontSize: 13, color: "var(--text-muted)" }}>
       {text}
@@ -435,12 +463,10 @@ function Settings({ cfg, T, W, onChange, onReset }) {
     </label>
   );
   const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12, marginTop: 10 };
-  // Remount the inputs on reset so they show the defaults again.
-  const key = JSON.stringify([T, W]) === JSON.stringify([cfg.thresholds, cfg.weights]) ? "defaults" : "custom";
   return (
     <details style={panel}>
       <summary style={{ cursor: "pointer", fontWeight: 700 }}>Ngưỡng và trọng số (chỉnh được)</summary>
-      <div key={key}>
+      <div key={formKey}>
         <h4 style={{ fontSize: 13, margin: "16px 0 0", color: "var(--text-muted)" }}>Trọng số</h4>
         <div style={grid}>{Object.entries(cfg.criteria).map(([k, text]) => field("w", k, text, W[k]))}</div>
         <h4 style={{ fontSize: 13, margin: "16px 0 0", color: "var(--text-muted)" }}>Ngưỡng</h4>
@@ -452,6 +478,7 @@ function Settings({ cfg, T, W, onChange, onReset }) {
       <ul style={{ fontSize: 13, color: "var(--text-muted)", margin: "14px 0 0", paddingLeft: 18, lineHeight: 1.6 }}>
         <li>Mỗi tiêu chí cho tín hiệu từ −1 (giảm) đến +1 (tăng), ±0.5 là tín hiệu một phần.</li>
         <li>Điểm = Σ(trọng số × tín hiệu) / Σ trọng số của các tiêu chí có dữ liệu × 100.</li>
+        <li>Mặc định, trọng số được cập nhật tự động mỗi tuần từ backtest, riêng cho khung 5m–1H và 4H–1D. Chỉnh tay một ô thì trang dùng bộ trọng số của bạn cho mọi khung.</li>
         <li>Nếu ADX dưới ngưỡng, kết luận là <b>Đi ngang</b> bất kể điểm, vì tín hiệu khi không có xu hướng thường nhiễu.</li>
       </ul>
     </details>

@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly on Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes)
+
+[Timer]
+OnCalendar=Sun *-*-* 00:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

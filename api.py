@@ -3,12 +3,14 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Literal, Optional
 import time
 from database import (get_coins, set_coins, get_admin, set_admin_password,
-                      get_ai_settings, set_ai_settings)
+                      get_ai_settings, set_ai_settings, get_active_weights, get_weights_admin,
+                      set_weights_locked, rollback_weights)
 from ai import ai_chat
 from auth import create_token, verify_admin, check_password, hash_password
 from analysis.binance import SymbolNotFound, UpstreamError
 from analysis.config import CRITERIA_META, THRESHOLD_LABELS, TIMEFRAMES, Thresholds, Weights
 from analysis.service import analyze
+from backtest.store import GROUPS, group_of
 
 router = APIRouter()
 
@@ -26,7 +28,8 @@ class AnalyzeRequest(BaseModel):
     symbol: str = Field(..., min_length=2, max_length=20)
     timeframe: Timeframe = "4h"
     thresholds: Thresholds = Field(default_factory=Thresholds)
-    weights: Weights = Field(default_factory=Weights)
+    # None = the backtest-driven defaults of the timeframe's group (short 5m-1h / long 4h-1d).
+    weights: Optional[Weights] = None
 
 # Per-IP request budget for the public endpoints that call Binance (in-memory, resets on
 # restart). Each analysis is up to 5 Binance requests; this keeps one visitor from
@@ -47,8 +50,17 @@ def _check_analysis_rate(ip: str):
     _analysis_hits[ip] = hits
 
 async def _run_analysis(request: Request, body: AnalyzeRequest) -> dict:
+    if body.weights is not None:
+        weights, info = body.weights, {"source": "custom"}
+    else:
+        g = group_of(body.timeframe)
+        active = (await get_active_weights())[g]
+        weights = Weights(**active["weights"])
+        info = {"source": "auto", "group": g, "updated_at": active["updated_at"], "origin": active["source"]}
     try:
-        return await analyze(request.app.state.binance, body.symbol, body.timeframe, body.thresholds, body.weights)
+        d = await analyze(request.app.state.binance, body.symbol, body.timeframe, body.thresholds, weights)
+        d["weights_info"] = info
+        return d
     except SymbolNotFound as e:
         raise HTTPException(404, f"Không tìm thấy cặp {e} trên Binance. Kiểm tra lại mã coin.") from e
     except UpstreamError as e:
@@ -63,6 +75,8 @@ async def analysis_config():
         "thresholds": Thresholds().model_dump(),
         "threshold_labels": THRESHOLD_LABELS,
         "weights": Weights().model_dump(),
+        "weight_sets": {g: v["weights"] for g, v in (await get_active_weights()).items()},
+        "weight_groups": GROUPS,
         "criteria": CRITERIA_META,
     }
 
@@ -226,6 +240,31 @@ async def admin_set_ai(data: AISettingsUpdate, _: str = Depends(verify_admin)):
     provider = data.provider if data.provider in ("deepseek", "gemini") else "deepseek"
     await set_ai_settings({"provider": provider, "deepseek_model": data.deepseek_model.strip() or "deepseek-flash",
                            "gemini_model": data.gemini_model.strip() or "gemini-2.5-flash"})
+    return {"ok": True}
+
+
+# ── Backtest weights ────────────────────────────────────────────────────────────
+
+class WeightsLock(BaseModel):
+    locked: bool
+
+class WeightsRollback(BaseModel):
+    group: Literal["short", "long"]
+
+@router.get("/api/crypto-analysis/admin/weights")
+async def admin_get_weights(_: str = Depends(verify_admin)):
+    return await get_weights_admin()
+
+@router.put("/api/crypto-analysis/admin/weights/lock")
+async def admin_lock_weights(data: WeightsLock, _: str = Depends(verify_admin)):
+    await set_weights_locked(data.locked)
+    return {"ok": True}
+
+@router.post("/api/crypto-analysis/admin/weights/rollback")
+async def admin_rollback_weights(data: WeightsRollback, _: str = Depends(verify_admin)):
+    if not await rollback_weights(data.group):
+        raise HTTPException(400, "No earlier weight set to go back to")
+    await get_active_weights(force=True)
     return {"ok": True}
 
 

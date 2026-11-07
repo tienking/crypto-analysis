@@ -98,3 +98,24 @@ export async function adminChangePassword(token, current_password, new_password)
   }
   return res.json();
 }
+
+export async function adminGetWeights(token) {
+  const res = await fetch(`${BASE}/admin/weights`, { headers: authH(token) });
+  if (!res.ok) throw new Error("Failed to load weights");
+  return res.json();
+}
+
+export async function adminLockWeights(token, locked) {
+  const res = await fetch(`${BASE}/admin/weights/lock`, { method: "PUT", headers: authH(token), body: JSON.stringify({ locked }) });
+  if (!res.ok) throw new Error("Save failed");
+  return res.json();
+}
+
+export async function adminRollbackWeights(token, group) {
+  const res = await fetch(`${BASE}/admin/weights/rollback`, { method: "POST", headers: authH(token), body: JSON.stringify({ group }) });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || "Rollback failed");
+  }
+  return res.json();
+}

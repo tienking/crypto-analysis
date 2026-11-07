@@ -1,0 +1,10 @@
+[Unit]
+Description=Crypto Analysis: archive Binance 5m futures series for backtests
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/projects/crypto-analysis
+EnvironmentFile=/root/projects/crypto-analysis/.env
+ExecStart=/root/projects/crypto-analysis/crypto-analysis-venv/bin/python -m backtest.collect
+Nice=15

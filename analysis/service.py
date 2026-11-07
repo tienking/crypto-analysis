@@ -12,6 +12,10 @@ from .criteria import Candles, Context, score
 from .liquidation import liquidation_map, pull
 
 
+# Backtest (README, "Weights"): no criterion predicted the next candles on these timeframes.
+SHORT_TF_NO_EDGE = ("5m", "15m", "30m")
+
+
 def normalize_symbol(raw: str) -> str:
     s = re.sub(r"[^A-Z0-9]", "", (raw or "").upper())
     if s.endswith(QUOTE):
@@ -89,6 +93,10 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
         is_btc=is_btc, funding=funding, oi_change=oi, liq=liq,
     )
     result = score(ctx, weights)
+    if tf in SHORT_TF_NO_EDGE:
+        result["warnings"].append(
+            f"Khung {tf}: backtest trên 10 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "
+            "Xem điểm như mô tả xu hướng hiện tại, không phải dự báo.")
 
     n = min(CHART_CANDLES, len(candles))
     sl = slice(-n, None)

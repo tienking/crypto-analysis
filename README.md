@@ -51,7 +51,12 @@ The analysis UI is in Vietnamese.
    timeframe from 4h (composite IC 4h +0.027 → +0.032, 12h +0.019 → +0.033, 1d +0.023 → +0.039).
    Derivatives and liquidation have only ~30 days of OI history (IC ≈ 0, too few samples to
    tell), so they keep 5 each. **On 5m–30m no criterion and no weighting predicted the next
-   candles**: treat the score there as a description of the current trend, not a forecast.
+   candles**: treat the score there as a description of the current trend, not a forecast
+   (the page shows that warning on 5m/15m/30m).
+
+   **Weights now update themselves weekly** (see *Backtest pipeline* below), separately for
+   two groups: **short** = 5m/15m/30m/1h and **long** = 4h/12h/1d. The table above is the
+   starting point of both.
 
    **Score = 100 × Σ(weight × signal) / Σ weight** of the criteria that have data. ADX14 below
    20 makes the verdict **ranging** whatever the score; otherwise ≥ 50 strong up, ≥ 20 lean up,
@@ -70,14 +75,48 @@ The analysis UI is in Vietnamese.
    `(up − down) / (up + down)`: ±1 from 2 × `liq_imbalance`, ±0.5 from `liq_imbalance`. The page
    draws the map (shorts above in green, longs below in red) with the biggest cluster per side.
 3. **Settings** — visitors can change every threshold and weight; they are kept in their
-   browser (`localStorage`: `ca-thresholds`, `ca-weights`, `ca-last`) and sent with each
-   request. The analysis refreshes every 60 s (can be turned off).
+   browser (`localStorage`: `ca-thresholds`, `ca-weights-v2`, `ca-last`) and sent with each
+   request. Without custom weights the request sends none and the server uses the active
+   backtest set of the timeframe's group (the criteria table says which, and since when).
+   The old `ca-weights` key is ignored and removed: it was also written when only a threshold
+   changed, which would have pinned those visitors to the old weights. The analysis refreshes
+   every 60 s (can be turned off).
 4. **AI assistant** (bottom-right) — DeepSeek or Gemini (Google), switchable in Admin. Each
    message sends the coin, timeframe, thresholds and weights on screen; the **server reruns the
    analysis** (15 s cache) and gives the result to the model as context, so the browser cannot
    feed it made-up numbers.
 5. **Admin** (`/projects/crypto-analysis/admin`, JWT login) — chart coin pairs, AI provider/model,
-   password. Stored in MongoDB (`settings` collection).
+   password (MongoDB `settings` collection), and **Backtest weights**: the active set per
+   group, recent runs (test IC now → proposed, applied or why not), **Lock** (runs still
+   propose but apply nothing) and **Roll back** (re-activate the previous set of a group).
+
+### Backtest pipeline
+
+Two systemd timers on the VPS run the `backtest/` package (`deploy/crypto-analysis-*.timer`):
+
+| Job | When | What |
+|---|---|---|
+| `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK, AVAX. Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
+| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
+
+Guardrails of a weekly update (`backtest/fit.py`):
+1. Each (coin, timeframe) history is split in time: older half = train, newer half = test.
+2. Candidate = the criteria's points shared in proportion to their train IC (negative → 0).
+   Criteria without enough rows in the group keep their weight.
+3. Step towards the candidate by the largest fraction that moves no weight more than
+   **3 points**, keeping the total.
+4. **Apply only if** the stepped set's composite IC on the test half beats the current set's
+   by at least 0.002, and weights are not locked. Otherwise the run is recorded and nothing
+   changes.
+5. Derivatives and liquidation stay fixed until the archive holds **180 days** of OI; on
+   ~15 days a trial run gave liquidation an IC of +0.07, which is exactly the noise this
+   threshold keeps out.
+
+Storage: MongoDB database `ca_backtest` (env `BACKTEST_DB`) on the same cluster:
+`market_5m` (one document per coin per UTC day, 288 slots per field, about 80 MB per year
+for 10 coins), `weight_sets` (every set used, one `active` per group), `runs` (every weekly
+run with its metrics) and `state` (`{_id: "weights", locked}`). The web app reads the active
+sets once a minute and falls back to the code defaults when the database is unreachable.
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
 USDⓈ-M futures; funding, open interest (change + history) and futures candles for the
@@ -94,7 +133,7 @@ US IPs (HTTP 451): the server must run outside the US.
 | Backend | Python / FastAPI · Uvicorn (port **8003**) |
 | Analysis | numpy (no pandas / TA library) · httpx async Binance client with host fallback and a 15 s TTL cache |
 | Chatbot | DeepSeek (`deepseek-flash` / `deepseek-v4-pro`) or Gemini (Google), grounded in the analysis on screen |
-| Database | MongoDB (Motor) — db `cryptonews` (old name kept, so no data move), collection `settings` |
+| Database | MongoDB (Motor) — db `cryptonews` (old name kept, so no data move), collection `settings`; db `ca_backtest` for the backtest archive and weights (pymongo in the jobs) |
 | Frontend | React 19 + Vite (base `/projects/crypto-analysis/`) · Inter + JetBrains Mono · TradingView widget |
 | Hosting | Hostinger VPS (shared), Nginx, systemd, GitLab CI/CD |
 
@@ -116,13 +155,22 @@ crypto-analysis/
 ├── ai.py                    # Chat dispatcher → DeepSeek or Gemini per AI settings
 ├── deepseek.py / gemini.py  # Chat clients
 ├── auth.py                  # Admin JWT + bcrypt
-├── database.py              # Motor: settings (coins / AI / admin), seed defaults
+├── database.py              # Motor: settings (coins / AI / admin), seed defaults; active weights (60 s cache), lock, rollback
 ├── config.py                # Env loader (Mongo, AI keys, JWT_SECRET, ADMIN_*)
+├── backtest/                # Run by systemd timers, not by the web app
+│   ├── store.py             # ca_backtest layout, day buckets, weight groups, rollback target
+│   ├── binance_hist.py      # Sync, throttled, paginated Binance history downloads
+│   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
+│   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
+│   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)
+│   └── reweight.py          # Weekly: backtest → propose → apply or keep → record the run
 ├── tests/                   # pytest, fake Binance + fake AI (no network, no MongoDB)
 ├── requirements.txt / requirements-dev.txt
 ├── .env.example
 ├── deploy/
 │   ├── crypto-analysis.service  # systemd unit (port 8003)
+│   ├── crypto-analysis-collect.service / .timer   # daily archive job
+│   ├── crypto-analysis-reweight.service / .timer  # weekly backtest + weights
 │   └── nginx-snippet.conf
 └── frontend/
     ├── index.html
@@ -130,7 +178,7 @@ crypto-analysis/
     └── src/
         ├── main.jsx            # Routes to AdminApp if path ends with /admin, else App
         ├── App.jsx             # Header, chart, analysis, chat
-        ├── AdminApp.jsx        # Login + coin pairs + AI settings + password
+        ├── AdminApp.jsx        # Login + AI settings + backtest weights + coin pairs + password
         ├── index.css           # Dark theme, fonts, up/down/warn colours
         ├── components/
         │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
@@ -146,13 +194,16 @@ crypto-analysis/
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/crypto-analysis/health` | Health check |
-| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, Vietnamese labels |
-| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
+| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels |
+| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` (no `weights` = the active backtest set of the timeframe's group; `weights_info` says which) → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
 | GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
 | POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
 | GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
 | GET/PUT | `/api/crypto-analysis/admin/ai-settings` | Read / save provider + per-provider model |
+| GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, lock state, days of OI archived |
+| PUT | `/api/crypto-analysis/admin/weights/lock` | `{locked}` |
+| POST | `/api/crypto-analysis/admin/weights/rollback` | `{group: short | long}` → re-activate the previous set (400 if none) |
 
 `timeframe` ∈ `5m | 15m | 30m | 1h | 4h | 12h | 1d`; the symbol is normalised to `{BASE}USDT`.
 
@@ -212,3 +263,20 @@ curl -s -o /dev/null -w "%{http_code}\n" "https://data-api.binance.vision/api/v3
 ```
 
 Add the blocks from `deploy/nginx-snippet.conf` to the tienmai Nginx server block (unchanged).
+
+**Backtest timers** (one-time install; the units run from the repo directory, so later pulls
+update the code they run):
+
+```bash
+cd /root/projects/crypto-analysis
+cp deploy/crypto-analysis-collect.service deploy/crypto-analysis-collect.timer \
+   deploy/crypto-analysis-reweight.service deploy/crypto-analysis-reweight.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now crypto-analysis-collect.timer crypto-analysis-reweight.timer
+systemctl start crypto-analysis-collect.service      # first archive now (~1-2 min)
+systemctl list-timers 'crypto-analysis-*'            # next runs
+journalctl -u crypto-analysis-collect -u crypto-analysis-reweight -n 50   # logs
+```
+
+The MongoDB user in `MONGODB_URL` needs read/write on `ca_backtest` too (Atlas default
+"readWriteAnyDatabase" has it).

@@ -56,6 +56,20 @@ class FakeBinance:
         return make_klines(self.trend, limit) if self.futures else None
 
 
+AUTO = {
+    "short": {"weights": Weights(htf=0, trend=100, structure=0, momentum=0, volume=0, derivatives=0, btc=0,
+                                 liquidation=0).model_dump(), "updated_at": None, "source": "backtest"},
+    "long": {"weights": Weights().model_dump(), "updated_at": None, "source": "default"},
+}
+
+
+@pytest.fixture(autouse=True)
+def fake_weights(monkeypatch):
+    async def active(force=False):
+        return AUTO
+    monkeypatch.setattr(api, "get_active_weights", active)
+
+
 @pytest.fixture
 def client():
     api._analysis_hits.clear()
@@ -135,6 +149,29 @@ def test_config_endpoint(client):
     d = client().get(URL + "/config").json()
     assert set(d["weights"]) == {"htf", "trend", "structure", "momentum", "volume", "derivatives", "btc", "liquidation"}
     assert sum(d["weights"].values()) == 100
+    assert d["weight_sets"]["short"]["trend"] == 100 and set(d["weight_groups"]) == {"short", "long"}
+
+
+def test_auto_weights_follow_the_timeframe_group(client):
+    c = client(0.004)
+    short = c.post(URL, json={"symbol": "SOL", "timeframe": "1h"}).json()
+    assert short["weights"]["trend"] == 100 and short["weights_info"] == {
+        "source": "auto", "group": "short", "updated_at": None, "origin": "backtest"}
+    assert {x["id"]: x["weight"] for x in short["criteria"]}["htf"] == 0
+    long_ = c.post(URL, json={"symbol": "SOL", "timeframe": "4h"}).json()
+    assert long_["weights"] == Weights().model_dump() and long_["weights_info"]["group"] == "long"
+
+
+def test_custom_weights_win(client):
+    w = Weights(htf=1, trend=1, structure=1, momentum=1, volume=1, derivatives=1, btc=1, liquidation=1).model_dump()
+    d = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "1h", "weights": w}).json()
+    assert d["weights"] == w and d["weights_info"] == {"source": "custom"}
+
+
+def test_short_timeframes_warn_that_there_is_no_edge(client):
+    c = client(0.004)
+    assert any("backtest" in w for w in c.post(URL, json={"symbol": "SOL", "timeframe": "15m"}).json()["warnings"])
+    assert not any("backtest" in w for w in c.post(URL, json={"symbol": "SOL", "timeframe": "1h"}).json()["warnings"])
 
 
 def test_rate_limit(client):

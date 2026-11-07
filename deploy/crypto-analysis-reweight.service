@@ -1,0 +1,15 @@
+[Unit]
+Description=Crypto Analysis: weekly backtest and weight update
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/projects/crypto-analysis
+EnvironmentFile=/root/projects/crypto-analysis/.env
+Environment=BACKTEST_WORKERS=2
+ExecStart=/root/projects/crypto-analysis/crypto-analysis-venv/bin/python -m backtest.reweight
+# Low priority: the other sites on this VPS stay responsive while it runs.
+Nice=19
+CPUWeight=20
+IOSchedulingClass=idle
+TimeoutStartSec=3h

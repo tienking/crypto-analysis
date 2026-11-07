@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword } from "./lib/api";
+import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword,
+  adminGetWeights, adminLockWeights, adminRollbackWeights } from "./lib/api";
 
 const SITE_URL = "/projects/crypto-analysis/";
 
@@ -86,6 +87,118 @@ function ListEditor({ title, fields, items, setItems }) {
         style={{ marginTop: 10, width: "100%", padding: 9, borderRadius: 9, border: "1px dashed var(--border)", background: "none", color: "var(--text-muted)", fontSize: 13, cursor: "pointer", fontFamily: "var(--font-display)" }}>
         + Add
       </button>
+    </div>
+  );
+}
+
+// ── Backtest weights ─────────────────────────────────────────────────────────────
+
+const CRITERIA = [["htf", "Higher TF"], ["trend", "EMA trend"], ["structure", "Structure"], ["momentum", "Momentum"],
+  ["volume", "Volume"], ["derivatives", "Derivatives"], ["btc", "BTC context"], ["liquidation", "Liquidation"]];
+const GROUPS = [["short", "5m – 1H"], ["long", "4H – 1D"]];
+const MIN_OI_DAYS = 180;
+const fmtDate = d => (d ? new Date(String(d).endsWith("Z") ? d : d + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
+const card = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 };
+const small = { fontSize: 12, color: "var(--text-muted)" };
+const btn = { padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "none", color: "var(--text)", fontSize: 12, cursor: "pointer", fontFamily: "var(--font-display)" };
+
+function WeightsAdmin({ token, flash }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => adminGetWeights(token).then(setD).catch(e => setErr(e.message));
+  useEffect(() => { load(); }, [token]);
+
+  const act = async (fn, ok) => {
+    setBusy(true);
+    try { await fn(); flash(ok); await load(); } catch (e) { flash(e.message); }
+    setBusy(false);
+  };
+
+  if (err) return <p style={{ ...small, color: "#f87171" }}>{err}</p>;
+  if (!d) return <p style={small}>Loading…</p>;
+  const lastRun = d.runs[0];
+  // minmax(0, 1fr): the wide runs table scrolls inside its card instead of widening the page.
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
+      <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gap: 3 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{d.locked ? "Locked: weekly runs only propose, nothing is applied" : "Automatic: weekly runs may apply new weights"}</span>
+          <span style={small}>
+            OI history archived: {d.oi_days} day{d.oi_days === 1 ? "" : "s"}
+            {d.oi_days < MIN_OI_DAYS ? ` · derivatives and liquidation join the fit at ${MIN_OI_DAYS}` : " · derivatives and liquidation are fitted"}
+            {lastRun ? ` · last run ${fmtDate(lastRun.started_at)} (${lastRun.status})` : " · no run yet"}
+          </span>
+        </div>
+        <button disabled={busy} onClick={() => act(() => adminLockWeights(token, !d.locked), d.locked ? "✓ Unlocked" : "✓ Locked")} style={btn}>
+          {d.locked ? "Unlock" : "Lock weights"}
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 14 }}>
+        {GROUPS.map(([g, title]) => {
+          const active = d.groups[g].sets.find(s => s.active);
+          const canBack = d.groups[g].can_rollback;
+          return (
+            <div key={g} style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{title}</span>
+                <button disabled={busy || !canBack} title="Re-activate the previous weight set"
+                  onClick={() => act(() => adminRollbackWeights(token, g), `✓ ${title} rolled back`)}
+                  style={{ ...btn, opacity: canBack ? 1 : 0.4, cursor: canBack ? "pointer" : "default" }}>Roll back</button>
+              </div>
+              {active ? (
+                <>
+                  <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                    <tbody>
+                      {CRITERIA.map(([k, name]) => (
+                        <tr key={k} style={{ borderTop: "1px solid var(--border)" }}>
+                          <td style={{ padding: "4px 0" }}>{name}</td>
+                          <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "var(--font-mono)" }}>{active.weights[k]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p style={{ ...small, marginTop: 8 }}>Active since {fmtDate(active.created_at)} · {active.source}</p>
+                </>
+              ) : <p style={small}>Code defaults (no run yet).</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={card}>
+        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Recent runs</p>
+        {d.runs.length === 0 ? <p style={small}>The first weekly run has not happened yet.</p> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 520 }}>
+              <thead><tr style={{ color: "var(--text-muted)", textAlign: "left" }}>
+                <th style={{ padding: "4px 6px 4px 0" }}>Started</th><th>Group</th><th>Test IC now → proposed</th><th>Result</th>
+              </tr></thead>
+              <tbody>
+                {d.runs.flatMap(r => (r.groups ? GROUPS.map(([g, title]) => {
+                  const x = r.groups[g];
+                  return (
+                    <tr key={r._id + g} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
+                      <td style={{ padding: "5px 6px 5px 0", whiteSpace: "nowrap" }}>{fmtDate(r.started_at)}</td>
+                      <td style={{ whiteSpace: "nowrap", paddingRight: 6 }}>{title}</td>
+                      <td style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap", paddingRight: 6 }}>
+                        {x.test_ic_current?.toFixed(3)}{x.test_ic_proposed != null ? ` → ${x.test_ic_proposed.toFixed(3)}` : ""}
+                      </td>
+                      <td style={{ color: x.applied ? "var(--accent)" : "var(--text-muted)" }}>{x.applied ? "Applied" : "Kept"} · {x.reason}</td>
+                    </tr>
+                  );
+                }) : [
+                  <tr key={r._id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "5px 6px 5px 0", whiteSpace: "nowrap" }}>{fmtDate(r.started_at)}</td>
+                    <td colSpan={3} style={{ color: r.status === "error" ? "#f87171" : "var(--text-muted)" }}>{r.status}{r.error ? `: ${r.error}` : ""}</td>
+                  </tr>,
+                ]))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -201,6 +314,15 @@ function Dashboard({ token, onLogout }) {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Backtest weights */}
+        <section style={{ minWidth: 0 }}>
+          <div style={{ marginBottom: 14 }}>
+            <h1 style={{ fontSize: 17, fontWeight: 700 }}>Backtest weights</h1>
+            <p style={{ ...small, marginTop: 4 }}>Updated weekly (Sunday 07:15 Vietnam time) only when the new set beats the current one on the newer half of the data; each criterion moves at most 3 points per run.</p>
+          </div>
+          <WeightsAdmin token={token} flash={flash} />
         </section>
 
         {/* Coins */}
