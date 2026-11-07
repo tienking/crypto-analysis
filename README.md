@@ -22,14 +22,36 @@ The analysis UI is in Vietnamese.
 
    | Criterion | Weight | Bullish when |
    |---|---|---|
-   | Higher-timeframe agreement | 20 | EMA trend up on the higher timeframe (5m→30m, 15m→1h, 30m→2h, 1h→4h, 4h→1d, 12h→3d, 1d→1w) |
-   | EMA trend | 20 | Price > EMA50 > EMA200 |
-   | Price structure | 15 | Higher high + higher low, or a break of the last pivot high |
-   | Momentum | 10 | RSI ≥ 50 and rising; MACD histogram positive and widening |
-   | Volume confirmation | 10 | Green-candle volume ≥ 1.2× red over 20 candles |
+   | Higher-timeframe agreement | 5 | EMA trend up on the higher timeframe (5m→30m, 15m→1h, 30m→2h, 1h→4h, 4h→1d, 12h→3d, 1d→1w) |
+   | EMA trend | 17 | Price > EMA50 > EMA200 |
+   | Price structure | 13 | Higher high + higher low, or a break of the last pivot high |
+   | Momentum | 17 | RSI ≥ 50 and rising; MACD histogram positive and widening |
+   | Volume confirmation | 15 | Green-candle volume ≥ 1.2× red over 20 candles |
    | Derivatives | 5 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
-   | BTC context | 10 | BTC's EMA trend up on the same timeframe (n/a when analysing BTC) |
-| Liquidation zones (estimated) | 10 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
+   | BTC context | 23 | BTC's EMA trend up on the same timeframe (n/a when analysing BTC) |
+   | Liquidation zones (estimated) | 5 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
+
+   **Weights come from a backtest** (Nov 2026; BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK,
+   AVAX; up to 15,000 candles per timeframe; the app's own criteria code replayed candle by
+   candle, with the forming higher-timeframe candle rebuilt so nothing looks ahead). Target:
+   the return over the next 5 candles, scaled by recent volatility. Information coefficient
+   (correlation of signal and that return):
+
+   | Criterion | 5m–30m | 1h | 4h / 12h / 1d |
+   |---|---|---|---|
+   | Higher timeframe | ≈ 0 | +0.01 | +0.02 / +0.00 / −0.01 |
+   | EMA trend | ≈ 0 | ≈ 0 | +0.04 / +0.05 / +0.04 |
+   | Structure | ≈ 0 to −0.02 | +0.02 | +0.02 / +0.04 / +0.05 |
+   | Momentum | −0.02 | +0.01 | +0.03 / +0.06 / +0.05 |
+   | Volume | ≈ 0 | +0.02 | +0.02 / +0.05 / +0.06 |
+   | BTC context | ≈ 0 | +0.01 | +0.05 / +0.06 / +0.08 |
+
+   The six price criteria share 90 points in proportion to their 4h–1d IC, fitted on the older
+   half of each history; on the newer half that beat the old hand-picked weights on every
+   timeframe from 4h (composite IC 4h +0.027 → +0.032, 12h +0.019 → +0.033, 1d +0.023 → +0.039).
+   Derivatives and liquidation have only ~30 days of OI history (IC ≈ 0, too few samples to
+   tell), so they keep 5 each. **On 5m–30m no criterion and no weighting predicted the next
+   candles**: treat the score there as a description of the current trend, not a forecast.
 
    **Score = 100 × Σ(weight × signal) / Σ weight** of the criteria that have data. ADX14 below
    20 makes the verdict **ranging** whatever the score; otherwise ≥ 50 strong up, ≥ 20 lean up,

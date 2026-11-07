@@ -36,14 +36,21 @@ class Thresholds(BaseModel):
 
 
 class Weights(BaseModel):
-    htf: float = Field(20, ge=0)
-    trend: float = Field(20, ge=0)
-    structure: float = Field(15, ge=0)
-    momentum: float = Field(10, ge=0)
-    volume: float = Field(10, ge=0)
+    """Backtest-based (Nov 2026: 10 large coins, 7 timeframes, next-5-candle return).
+
+    The six price criteria share 90 points in proportion to their information coefficient on
+    4h/12h/1d (fitted on the older half of the data, it beat the old hand-picked weights on
+    the newer half). Derivatives and liquidation only have ~30 days of Binance OI history, too
+    little to measure, so they keep a small weight. Below 1h no criterion showed an edge.
+    """
+    htf: float = Field(5, ge=0)
+    trend: float = Field(17, ge=0)
+    structure: float = Field(13, ge=0)
+    momentum: float = Field(17, ge=0)
+    volume: float = Field(15, ge=0)
     derivatives: float = Field(5, ge=0)
-    btc: float = Field(10, ge=0)
-    liquidation: float = Field(10, ge=0)
+    btc: float = Field(23, ge=0)
+    liquidation: float = Field(5, ge=0)
 
 
 CRITERIA_META = {
