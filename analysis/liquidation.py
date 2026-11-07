@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import numpy as np
 
-# (leverage, share of new positions). Rough mix for a retail-heavy perp market.
-LEVERAGE_MIX = ((10, 0.30), (25, 0.30), (50, 0.25), (100, 0.15))
+# (leverage, share of new positions). Calibrated on BTC against the Coinglass heatmap
+# (Nov 2026): a lower-leverage mix put the biggest clusters too far from price.
+LEVERAGE_MIX = ((10, 0.05), (25, 0.20), (50, 0.40), (100, 0.35))
 MAINT = 0.004  # maintenance margin, pulls the liquidation price slightly towards entry
 
 

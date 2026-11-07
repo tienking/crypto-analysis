@@ -41,7 +41,7 @@ The analysis UI is in Vietnamese.
    the public heatmaps. Open-interest history (500 points of `openInterestHist`, Binance keeps 30 days:
    5m for 5m, 15m for 15m, 30m for 30m, 1h for 1h/4h, 2h for 12h, 4h for 1d) is aligned with futures candles. Each OI rise = new
    positions at the candle's typical price, one long and one short per contract, spread over
-   10x/25x/50x/100x (30/30/25/15%); a long liquidates near `entry × (1 − 1/L + 0.4%)`, a short
+   10x/25x/50x/100x (5/20/40/35%, calibrated on BTC against Coinglass); a long liquidates near `entry × (1 − 1/L + 0.4%)`, a short
    near `entry × (1 + 1/L − 0.4%)`. A level is removed once a later candle trades through it; an
    OI fall shrinks every open level pro rata. What remains is binned in 0.25% steps within
    ±`liq_range_pct`. Pull of a side = Σ USD / distance% (floor 0.2%); the signal is
