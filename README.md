@@ -13,6 +13,7 @@ The analysis UI is in Vietnamese.
 ## How it works
 
 1. **Market chart** — a TradingView candle chart (1H) for the coin pairs set in Admin.
+   The same pairs appear as quick-pick chips under the analysis coin input.
    The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): the
    indicators (EMA, MA, RSI, MACD, ADX, volume, pivots, open interest, funding: description,
    formula as computed in `analysis/indicators.py`, how to read it), each of the 8 criteria

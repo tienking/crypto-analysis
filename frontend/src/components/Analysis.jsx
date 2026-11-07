@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { analyzeCoin, fetchAnalysisConfig } from "../lib/api";
+import { analyzeCoin, fetchAnalysisConfig, fetchCoins } from "../lib/api";
 
 // Coin trend score: 8 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
 // UI text is Vietnamese. API data is only ever rendered as text, never as HTML.
@@ -100,14 +100,27 @@ export default function Analysis({ request, onAnalyzed }) {
     }).catch(() => setStatus({ kind: "err", msg: "Không tải được cấu hình" }));
   }, [run]);
 
-  // A coin picked on the chart: analyse it.
+  // Quick picks under the input: the chart coin pairs set in Admin, as base symbols.
+  const [quick, setQuick] = useState([]);
   useEffect(() => {
-    if (!request?.symbol) return;
-    const symbol = request.symbol.replace(/USDT$/i, "");
+    fetchCoins().then(list => {
+      if (!Array.isArray(list)) return;
+      const bases = list.map(c => String(c.label || "").trim().toUpperCase().replace(/USDT$/, "")).filter(Boolean);
+      setQuick([...new Set(bases)]);
+    }).catch(() => {});
+  }, []);
+
+  const pick = useCallback(symbol => {
     skipTyping.current = symbol;
     setInput(symbol);
     run({ symbol });
-  }, [request, run]);
+  }, [run]);
+
+  // A coin picked on the chart: analyse it.
+  useEffect(() => {
+    if (!request?.symbol) return;
+    pick(request.symbol.replace(/USDT$/i, ""));
+  }, [request, pick]);
 
   // Typing: analyse after a pause (not for the first value or one set by the chart).
   const firstInput = useRef(true);
@@ -168,7 +181,7 @@ export default function Analysis({ request, onAnalyzed }) {
           <button type="submit" style={{ background: "var(--accent)", color: "#000", border: 0, borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "var(--font-display)", whiteSpace: "nowrap", flexShrink: 0 }}>Phân tích</button>
         </form>
         {/* Narrow screens: full width, equal columns, so all 7 timeframes always fit on one row. */}
-        <div role="group" aria-label="Khung thời gian" style={{ display: narrow ? "grid" : "inline-flex", gridTemplateColumns: `repeat(${TIMEFRAMES.length}, minmax(0, 1fr))`, flex: narrow ? "1 1 100%" : undefined, background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: 3 }}>
+        <div role="group" aria-label="Khung thời gian" style={{ order: narrow ? 2 : 1, display: narrow ? "grid" : "inline-flex", gridTemplateColumns: `repeat(${TIMEFRAMES.length}, minmax(0, 1fr))`, flex: narrow ? "1 1 100%" : undefined, background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: 3 }}>
           {TIMEFRAMES.map(([key, text]) => (
             <button key={key} type="button" aria-pressed={tf === key} onClick={() => { setTf(key); run({ tf: key }); }}
               style={{ border: 0, padding: narrow ? "7px 0" : "7px 12px", borderRadius: 7, whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 13, cursor: "pointer", background: tf === key ? "var(--text)" : "transparent", color: tf === key ? "var(--bg)" : "var(--text-muted)" }}>
@@ -176,6 +189,19 @@ export default function Analysis({ request, onAnalyzed }) {
             </button>
           ))}
         </div>
+        {quick.length > 0 && (
+          <div role="group" aria-label="Coin gợi ý" style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: "1 1 100%", order: narrow ? 1 : 2 }}>
+            {quick.map(c => {
+              const on = input.trim().toUpperCase() === c;
+              return (
+                <button key={c} type="button" aria-pressed={on} onClick={() => pick(c)}
+                  style={{ fontSize: 12, padding: "5px 11px", borderRadius: 16, cursor: "pointer", fontFamily: "var(--font-mono)", fontWeight: 600,
+                    border: `1px solid ${on ? "var(--accent-border)" : "var(--border)"}`, background: on ? "var(--accent-dim)" : "var(--bg-card)",
+                    color: on ? "var(--accent)" : "var(--text-muted)" }}>{c}</button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
