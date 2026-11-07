@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchAnalysisConfig } from "../lib/api";
+import { ExBtc, ExDerivatives, ExHtf, ExLiquidation, ExMomentum, ExStructure, ExTrend, ExVolume } from "./GuideFigures";
 
 // Full-screen beginner guide: what every criterion means, why it is there and exactly how it
 // is computed. Numbers (thresholds, weights) come from /analysis/config, so the text always
@@ -24,14 +25,20 @@ const Sig = ({ v, children }) => (
   <li><b style={{ fontFamily: "var(--font-mono)", color: v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "var(--text-muted)" }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v)}</b> {children}</li>
 );
 
-function Criterion({ id, n, title, why, children }) {
+function Criterion({ id, n, title, why, ex, children }) {
   return (
-    <section id={`g-${id}`} style={box} aria-labelledby={`g-${id}-t`}>
+    <section id={`g-${id}`} style={{ ...box, minWidth: 0 }} aria-labelledby={`g-${id}-t`}>
       <h3 id={`g-${id}-t`} style={h3}>{n}. {title}</h3>
       <div style={tag}>Vì sao có tiêu chí này</div>
       <p style={p}>{why}</p>
       <div style={tag}>Cách tính</div>
       {children}
+      {ex && (
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 6 }}>
+          <div style={tag}>Ví dụ minh hoạ</div>
+          {ex}
+        </div>
+      )}
     </section>
   );
 }
@@ -135,8 +142,13 @@ export default function Guide({ onClose }) {
 
         <section id="g-criteria" style={{ display: "grid", gap: 14, scrollMarginTop: 80 }}>
           <h2 style={h2}>8 tiêu chí</h2>
+          <p style={muted}>
+            Mỗi tiêu chí có một ví dụ minh hoạ. Giá trong ví dụ là giá giả lập để thấy rõ từng trường hợp (chu kỳ EMA cũng
+            được rút ngắn cho vừa khung hình), nhưng mọi chỉ báo và tín hiệu trong ví dụ đều được tính bằng đúng quy tắc trang
+            đang dùng.
+          </p>
 
-          <Criterion id="htf" n={1} title={names.htf || "Đồng thuận khung lớn"}
+          <Criterion id="htf" ex={<ExHtf T={T} />} n={1} title={names.htf || "Đồng thuận khung lớn"}
             why="Xu hướng trên khung dài thường bền hơn khung ngắn. Một tín hiệu tăng ở khung 1H mà khung 4H đang giảm mạnh thì dễ chỉ là một nhịp hồi. Tiêu chí này hỏi: bức tranh lớn có ủng hộ không?">
             <p style={p}>Áp dụng đúng cách tính của tiêu chí 2 (Xu hướng EMA), nhưng trên <b>khung lớn hơn</b>:</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 10px" }}>
@@ -145,7 +157,7 @@ export default function Guide({ onClose }) {
             <p style={muted}>Nến khung lớn đang chạy dở cũng được tính, với giá hiện tại làm giá đóng.</p>
           </Criterion>
 
-          <Criterion id="trend" n={2} title={names.trend || "Xu hướng EMA"}
+          <Criterion id="trend" ex={<ExTrend T={T} />} n={2} title={names.trend || "Xu hướng EMA"}
             why={`Hai đường trung bình ${ef} (nhanh) và ${es} (chậm) là cách phổ biến nhất để xác định xu hướng. Khi giá nằm trên cả hai và đường nhanh nằm trên đường chậm, thị trường đang ở xu hướng tăng; ngược lại là xu hướng giảm.`}>
             <ul style={ul}>
               <Sig v={1}>Giá &gt; {ef} &gt; {es}: xu hướng tăng rõ.</Sig>
@@ -160,7 +172,7 @@ export default function Guide({ onClose }) {
             </p>
           </Criterion>
 
-          <Criterion id="structure" n={3} title={names.structure || "Cấu trúc giá"}
+          <Criterion id="structure" ex={<ExStructure T={T} />} n={3} title={names.structure || "Cấu trúc giá"}
             why="Xu hướng tăng thật sự tạo ra các đỉnh sau cao hơn đỉnh trước (Higher High) và đáy sau cao hơn đáy trước (Higher Low). Đây là cách nhìn xu hướng trực tiếp từ giá, không qua đường trung bình nào.">
             <p style={p}>
               Tìm các <b>đỉnh/đáy xác nhận</b> (pivot): một nến là đỉnh nếu giá cao của nó cao nhất trong {T.pivot_window} nến
@@ -175,7 +187,7 @@ export default function Guide({ onClose }) {
             </ul>
           </Criterion>
 
-          <Criterion id="momentum" n={4} title={names.momentum || "Động lượng (RSI + MACD)"}
+          <Criterion id="momentum" ex={<ExMomentum T={T} />} n={4} title={names.momentum || "Động lượng (RSI + MACD)"}
             why="Xu hướng là hướng đi, động lượng là tốc độ và độ mạnh của bước đi. Giá vẫn tăng nhưng động lượng yếu dần thường là dấu hiệu sớm của việc chững lại. Tiêu chí này dùng hai chỉ báo quen thuộc: RSI và MACD.">
             <p style={p}><b>Phần RSI(14)</b>: RSI đo tỉ lệ nến tăng so với nến giảm gần đây, thang 0–100.</p>
             <ul style={ul}>
@@ -195,7 +207,7 @@ export default function Guide({ onClose }) {
             <p style={p}>Tín hiệu của tiêu chí = <b>trung bình cộng</b> của phần RSI và phần MACD.</p>
           </Criterion>
 
-          <Criterion id="volume" n={5} title={names.volume || "Volume xác nhận"}
+          <Criterion id="volume" ex={<ExVolume T={T} />} n={5} title={names.volume || "Volume xác nhận"}
             why="Giá tăng mà khối lượng giao dịch thấp thì dễ là tăng 'ảo'. Khi các nến tăng có khối lượng áp đảo các nến giảm, nghĩa là bên mua thực sự đang bỏ tiền vào.">
             <p style={p}>
               Trong {T.vol_lookback} nến gần nhất, cộng khối lượng của các <b>nến xanh</b> (đóng ≥ mở) và các <b>nến đỏ</b>:
@@ -207,7 +219,7 @@ export default function Guide({ onClose }) {
             </ul>
           </Criterion>
 
-          <Criterion id="derivatives" n={6} title={names.derivatives || "Phái sinh (OI + Funding)"}
+          <Criterion id="derivatives" ex={<ExDerivatives T={T} />} n={6} title={names.derivatives || "Phái sinh (OI + Funding)"}
             why="Phần lớn khối lượng crypto nằm ở hợp đồng futures. Open Interest (OI) là tổng số hợp đồng đang mở: OI tăng nghĩa là có tiền mới vào lệnh. Funding là phí bên long và bên short trả cho nhau mỗi 8 giờ: funding cao nghĩa là phe long đang quá đông, dễ bị 'xả'.">
             <p style={p}>Dùng % thay đổi OI trong {T.vol_lookback} kỳ, % thay đổi giá trong {T.vol_lookback} nến, và funding gần nhất. Xét theo thứ tự:</p>
             <ul style={ul}>
@@ -219,13 +231,13 @@ export default function Guide({ onClose }) {
             <p style={muted}>Coin không có futures trên Binance: "Thiếu dữ liệu", không tính vào điểm.</p>
           </Criterion>
 
-          <Criterion id="btc" n={7} title={names.btc || "Bối cảnh BTC"}
+          <Criterion id="btc" ex={<ExBtc T={T} />} n={7} title={names.btc || "Bối cảnh BTC"}
             why="Phần lớn altcoin chạy theo Bitcoin: khi BTC giảm mạnh, rất ít coin đi ngược được. Backtest của trang cho thấy đây là tiêu chí có sức dự báo tốt nhất ở khung 4H trở lên.">
             <p style={p}>Áp dụng cách tính của tiêu chí 2 (Xu hướng EMA) cho <b>BTC/USDT cùng khung thời gian</b>.</p>
             <p style={muted}>Khi đang phân tích chính BTC: "Thiếu dữ liệu", không tính.</p>
           </Criterion>
 
-          <Criterion id="liquidation" n={8} title={names.liquidation || "Vùng thanh lý (ước tính)"}
+          <Criterion id="liquidation" ex={<ExLiquidation T={T} />} n={8} title={names.liquidation || "Vùng thanh lý (ước tính)"}
             why="Khi giá chạm mức thanh lý của một nhóm lệnh đòn bẩy, sàn buộc đóng các lệnh đó, tạo ra lệnh mua/bán dồn dập. Vì vậy giá hay bị 'hút' về những vùng tập trung nhiều lệnh chờ thanh lý, như một nam châm.">
             <p style={p}>
               Binance không công bố vị trí các lệnh, nên đây là <b>mô hình ước tính</b> (như các heatmap công khai khác):

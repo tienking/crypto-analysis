@@ -15,9 +15,12 @@ The analysis UI is in Vietnamese.
 1. **Market chart** — a TradingView candle chart (1H) for the coin pairs set in Admin.
    The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): what
    the page does, how the score and verdict are computed, each of the 8 criteria (why it
-   exists, exact rules), the warnings, where the weights come from and the limits. Its
+   exists, exact rules, and an **illustrated example** with a chart, how to read it and a
+   worked calculation), the warnings, where the weights come from and the limits. Its
    thresholds and the current weights are read from `/analysis/config`, so the text always
-   matches what the server computes. Esc or ✕ closes it.
+   matches what the server computes. The example prices are made up, but every indicator and
+   signal in them is computed with the server's rules (`guideData.js` ports EMA, RSI, MACD and
+   the criteria), so a chart never claims a signal the app would not give. Esc or ✕ closes it.
    Picking a pair on the chart analyses that coin below.
 2. **Analysis** — the backend pulls Binance public market data (no API key): candles for the
    timeframe and the next higher one, BTC candles, funding rate and open-interest change.
@@ -192,6 +195,8 @@ crypto-analysis/
         │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, liquidation map, criteria, settings
         │   ├── RunsChart.jsx    # Admin: test IC per backtest run (SVG line chart, tooltip, hidden table)
         │   ├── Guide.jsx        # "Hướng dẫn" full-screen guide to the criteria (numbers from /analysis/config)
+        │   ├── GuideFigures.jsx # One illustrated example per criterion (SVG at measured width)
+        │   ├── guideData.js     # Example series + JS ports of EMA/RSI/MACD and the criteria rules
         │   └── ChatPopup.jsx    # AI assistant (bottom-right)
         └── lib/api.js           # API client
 ```
