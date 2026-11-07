@@ -16,7 +16,7 @@ The analysis UI is in Vietnamese.
    The header's **Hướng dẫn** button opens a full-screen beginner guide (Vietnamese): what
    the page does, how the score and verdict are computed, each of the 8 criteria (why it
    exists, exact rules, and an **illustrated example** with a chart, how to read it and a
-   worked calculation), the warnings, where the weights come from and the limits. Its
+   worked calculation), the warnings, where the weights come from, the bottom signals and the limits. Its
    thresholds and the current weights are read from `/analysis/config`, so the text always
    matches what the server computes. The example prices are made up, but every indicator and
    signal in them is computed with the server's rules (`guideData.js` ports EMA, RSI, MACD and
@@ -82,6 +82,33 @@ The analysis UI is in Vietnamese.
    ±`liq_range_pct`. Pull of a side = Σ USD / distance% (floor 0.2%); the signal is
    `(up − down) / (up + down)`: ±1 from 2 × `liq_imbalance`, ±0.5 from `liq_imbalance`. The page
    draws the map (shorts above in green, longs below in red) with the biggest cluster per side.
+   **Bottom signals** (`analysis/bottoms.py`, the "Dấu hiệu đáy" card), on fixed timeframes
+   whatever the one on screen: **short** = 4h candles (is price at a 7-day low, i.e. is the
+   lowest low of the last day also the lowest of 7 days?), **mid** = 1d candles (last 7 days vs
+   60 days). Four bottom signs at the last closed candle: RSI ≤ 30 in the last 3 candles,
+   bullish RSI divergence, MACD line below 0 with the histogram rising 2 candles, a
+   capitulation candle (red, volume ≥ 2× the 20-candle average) in the last 5. At a low, the
+   card shows the **measured share of past lows with the same number of signs (0/1/2/3+) that
+   held** for the next 7 / 60 days, against the share of all lows; away from a low it shows
+   the distance to it and no rate. Measured by `python -m backtest.bottoms` on spot history
+   since 2017 of the 10 backtest coins (pasted into `RATES`, not run by a timer):
+
+   | Signs | Short (4h, 7 days) | Mid (1d, 60 days) |
+   |---|---|---|
+   | 0 | 19% (4,227 lows) | 25% (639) |
+   | 1 | 29% (12,217) | 31% (1,520) |
+   | 2 | 31% (10,683) | 36% (1,256) |
+   | 3–4 | 38% (2,512) | 50% (290) |
+   | all lows | 29% | 33% |
+
+   On both the older and the newer half of the history, 0 signs is the lowest rate and 3+ the
+   highest (1 and 2 signs swap places on the older 4h half). **Cycle** = a
+   checklist on weekly candles, not a rate (Binance history holds two cycle bottoms): ≥ 70%
+   under the all-time high, weekly RSI ≤ 30 in the last 8 weeks, price under the 200-week MA
+   (needs 200 weeks), a capitulation week in the last 8, weekly MACD below 0 with the
+   histogram rising. BTC met 4/5 around the Dec 2018 bottom and through Jun–Dec 2022; for
+   altcoins the drawdown condition stays true for years, so it fires early. All of it is
+   optional data: a failure leaves that part `null`.
 3. **Settings** — visitors can change every threshold and weight; they are kept in their
    browser (`localStorage`: `ca-thresholds`, `ca-weights-v2`, `ca-last`) and sent with each
    request. Without custom weights the request sends none and the server uses the active
@@ -130,7 +157,8 @@ sets once a minute and falls back to the code defaults when the database is unre
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
 USDⓈ-M futures; funding, open interest (change + history) and futures candles for the
-liquidation map from `fapi.binance.com` (up to 7 requests per analysis, 15 s cache). Missing
+liquidation map from `fapi.binance.com`, plus 4h, 1d and 1w candles for the bottom signals
+(up to 10 requests per analysis, 15 s cache). Missing
 optional data (higher timeframe, BTC, funding, OI) only marks that criterion "no data". ⚠️ Binance blocks
 US IPs (HTTP 451): the server must run outside the US.
 
@@ -161,6 +189,7 @@ crypto-analysis/
 │   ├── indicators.py        # Pure numpy: ema, rsi, macd, adx, pivots
 │   ├── criteria.py          # Candles, Context, the 8 crit_* functions, score(), verdict
 │   ├── liquidation.py       # Pure numpy liquidation-map model + pull()
+│   ├── bottoms.py           # Bottom signs, measured hit rates (short 4h / mid 1d), weekly cycle checklist
 │   └── service.py           # analyze(): parallel fetch → Context → score → JSON (no NaN)
 ├── ai.py                    # Chat dispatcher → DeepSeek or Gemini per AI settings
 ├── deepseek.py / gemini.py  # Chat clients
@@ -173,6 +202,7 @@ crypto-analysis/
 │   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
 │   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)
+│   ├── bottoms.py           # Manual: measure the bottom-signal hit rates behind analysis/bottoms.py
 │   └── reweight.py          # Weekly: backtest → propose → apply or keep → record the run
 ├── tests/                   # pytest, fake Binance + fake AI (no network, no MongoDB)
 ├── requirements.txt / requirements-dev.txt
@@ -208,8 +238,8 @@ crypto-analysis/
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/crypto-analysis/health` | Health check |
-| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels |
-| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` (no `weights` = the active backtest set of the timeframe's group; `weights_info` says which) → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
+| GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels, `bottoms` (horizons, measured rates, samples, base rates) |
+| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` (no `weights` = the active backtest set of the timeframe's group; `weights_info` says which) → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures), `bottoms` (`short`, `mid`: at a low?, signs, measured rate; `cycle`: weekly checklist). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
 | GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
 | POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |

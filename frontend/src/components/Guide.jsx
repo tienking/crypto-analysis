@@ -88,7 +88,7 @@ export default function Guide({ onClose }) {
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "24px max(16px, min(24px, 4vw)) 64px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 28 }}>
         <nav aria-label="Mục lục" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[["g-start", "Trang này làm gì"], ["g-score", "Cách ra điểm"], ["g-criteria", "8 tiêu chí"], ["g-warn", "Cảnh báo"], ["g-weights", "Trọng số"], ["g-limits", "Giới hạn"]].map(([id, t]) => (
+          {[["g-start", "Trang này làm gì"], ["g-score", "Cách ra điểm"], ["g-criteria", "8 tiêu chí"], ["g-warn", "Cảnh báo"], ["g-weights", "Trọng số"], ["g-bottoms", "Dấu hiệu đáy"], ["g-limits", "Giới hạn"]].map(([id, t]) => (
             <a key={id} href={`#${id}`} onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
               style={{ fontSize: 13, color: "var(--text)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 12px" }}>{t}</a>
           ))}
@@ -310,12 +310,86 @@ export default function Guide({ onClose }) {
           </p>
         </section>
 
+        <section id="g-bottoms" style={{ scrollMarginTop: 80 }}>
+          <h2 style={h2}>Dấu hiệu đáy</h2>
+          <p style={p}>
+            Ô <b>"Dấu hiệu đáy"</b> (dưới bản đồ thanh lý) trả lời câu hỏi: giá đang ở đáy, đáy này có giữ được không? Ô này
+            không phụ thuộc khung bạn đang chọn mà luôn xét 3 tầm: <b>ngắn hạn</b> (nến 4H), <b>trung hạn</b> (nến 1D) và
+            <b> chu kỳ</b> (nến tuần).
+          </p>
+          <h3 style={h3}>4 dấu hiệu đáy (đọc ở nến đã đóng gần nhất)</h3>
+          <ul style={ul}>
+            <li><b>RSI quá bán</b>: RSI(14) ≤ 30 trong 3 nến gần nhất. Giá đã bị bán quá đà.</li>
+            <li><b>Phân kỳ tăng RSI</b>: giá tạo đáy thấp hơn đáy trước, nhưng RSI tạo đáy cao hơn (đáy RSI trước dưới 40, hai đáy cách nhau tối đa 40 nến, đáy mới xác nhận trong 15 nến gần nhất). Giá còn giảm nhưng lực bán yếu dần.</li>
+            <li><b>MACD âm nhưng đang hồi</b>: đường MACD dưới 0 và histogram tăng 2 nến liên tiếp. Đà giảm đang chậm lại.</li>
+            <li><b>Nến bán tháo</b>: trong 5 nến gần nhất có một nến đỏ với volume ≥ 2 lần trung bình 20 nến trước đó. Người bán hoảng loạn, thường xảy ra gần cuối một nhịp giảm.</li>
+          </ul>
+          <h3 style={h3}>Tỉ lệ % được tính thế nào?</h3>
+          <p style={p}>
+            <b>"Ở đáy 7 ngày"</b> nghĩa là mức thấp nhất trong 1 ngày qua (6 nến 4H) cũng là mức thấp nhất của 7 ngày. Đáy đó
+            <b> "giữ được"</b> nếu trong 7 ngày sau giá không xuống thấp hơn. Trung hạn tính tương tự trên nến 1D: đáy của 7 ngày
+            gần nhất là thấp nhất 60 ngày, và không bị thủng trong 60 ngày sau.
+          </p>
+          <p style={p}>
+            Trang đã đếm lại mọi lần như vậy trên lịch sử 10 coin lớn từ 2017, chia theo số dấu hiệu đáy có lúc đó. Con số bạn
+            thấy là kết quả của nhóm có cùng số dấu hiệu với hiện tại:
+          </p>
+          {cfg?.bottoms && (
+            <div style={{ margin: "4px 0 12px" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", maxWidth: 520 }}>
+                <caption style={{ ...muted, textAlign: "left", margin: "0 0 6px" }}>Tỉ lệ đáy giữ được theo số dấu hiệu</caption>
+                <thead><tr><th style={th}>Số dấu hiệu</th><th style={{ ...th, textAlign: "right" }}>Ngắn hạn (4H, 7 ngày)</th><th style={{ ...th, textAlign: "right" }}>Trung hạn (1D, 60 ngày)</th></tr></thead>
+                <tbody>
+                  {[0, 1, 2, 3].map(k => (
+                    <tr key={k}>
+                      <td style={td}>{k === 3 ? "3–4" : k}</td>
+                      {["short", "mid"].map(h => (
+                        <td key={h} style={{ ...td, textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                          {Math.round(cfg.bottoms.rates[h][k] * 100)}% <span style={{ color: "var(--text-muted)", fontSize: 12 }}>({cfg.bottoms.samples[h][k]} lần)</span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...td, color: "var(--text-muted)" }}>Mọi lần ở đáy</td>
+                    {["short", "mid"].map(h => <td key={h} style={{ ...td, textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{Math.round(cfg.bottoms.base[h] * 100)}%</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p style={p}>
+            Cách đọc: nhìn chung càng nhiều dấu hiệu thì đáy càng hay giữ được. Ở cả nửa dữ liệu cũ lẫn nửa dữ liệu mới, nhóm 0
+            dấu hiệu luôn thấp nhất và nhóm 3–4 dấu hiệu luôn cao nhất. Nhưng ngay cả khi
+            có 3–4 dấu hiệu, khoảng một nửa (trung hạn) đến gần hai phần ba (ngắn hạn) số đáy vẫn bị thủng. Khi giá không ở đáy,
+            ô hiển thị "—" cùng khoảng cách tới đáy gần nhất: tỉ lệ chỉ áp dụng khi giá đang ở đáy.
+          </p>
+          <h3 style={h3}>Đáy chu kỳ (nến tuần)</h3>
+          <p style={p}>
+            Đáy chu kỳ là đáy lớn sau cả một mùa giảm giá (với BTC: 12/2018 và 11/2022). Lịch sử Binance mới có 2 lần như vậy, quá
+            ít để tính tỉ lệ, nên trang chỉ <b>đếm 5 điều kiện</b> thường thấy ở các đáy đó:
+          </p>
+          <ul style={ul}>
+            <li>Giá thấp hơn đỉnh cao nhất (trên Binance) từ 70% trở lên.</li>
+            <li>RSI tuần ≤ 30 trong 8 tuần gần nhất.</li>
+            <li>Giá dưới MA200 tuần (trung bình giá đóng 200 tuần; cần đủ 200 tuần dữ liệu).</li>
+            <li>Có tuần bán tháo: tuần đỏ với volume ≥ 2 lần trung bình 20 tuần, trong 8 tuần gần nhất.</li>
+            <li>MACD tuần dưới 0 nhưng histogram đang tăng.</li>
+          </ul>
+          <p style={muted}>
+            Kiểm tra lại trên lịch sử: BTC đạt 4/5 điều kiện trong các tuần quanh đáy 12/2018 và nhiều tuần từ 6 đến 12/2022 (đáy
+            thật là 11/2022). Checklist chỉ ra <b>vùng đáy</b>, không chỉ đúng tuần đáy. Với altcoin, điều kiện "giảm ≥ 70%" hay
+            đúng trong nhiều năm vì ít altcoin quay lại đỉnh cũ, nên checklist dễ báo sớm.
+          </p>
+        </section>
+
         <section id="g-limits" style={{ scrollMarginTop: 80 }}>
           <h2 style={h2}>Giới hạn cần biết</h2>
           <ul style={ul}>
             <li>Ngay cả ở khung 4H–1D, lợi thế của điểm số là <b>nhỏ</b>: đúng chiều nhiều hơn sai một chút, không phải công cụ chắc thắng.</li>
             <li>Ở khung 5m–30m, điểm số gần như không có sức dự báo.</li>
             <li>Vùng thanh lý là ước tính từ mô hình, không phải lệnh thật.</li>
+            <li>Tỉ lệ đáy là thống kê quá khứ trên 10 coin lớn; coin nhỏ hoặc mới niêm yết có thể hành xử khác.</li>
             <li>Tin tức, sự kiện vĩ mô (lãi suất, CPI...) có thể đảo chiều thị trường mà không chỉ báo kỹ thuật nào báo trước.</li>
             <li>Luôn tự đặt điểm cắt lỗ và chỉ dùng số tiền bạn chấp nhận mất. Đây không phải lời khuyên đầu tư.</li>
           </ul>

@@ -7,6 +7,8 @@ from database import (get_coins, set_coins, get_admin, set_admin_password,
                       set_weights_locked, rollback_weights)
 from ai import ai_chat
 from auth import create_token, verify_admin, check_password, hash_password
+from analysis.bottoms import BASE, HORIZONS, RATES
+from analysis.bottoms import N as BOTTOM_N
 from analysis.binance import SymbolNotFound, UpstreamError
 from analysis.config import CRITERIA_META, THRESHOLD_LABELS, TIMEFRAMES, Thresholds, Weights
 from analysis.service import analyze
@@ -78,6 +80,7 @@ async def analysis_config():
         "weight_sets": {g: v["weights"] for g, v in (await get_active_weights()).items()},
         "weight_groups": GROUPS,
         "criteria": CRITERIA_META,
+        "bottoms": {"horizons": HORIZONS, "rates": RATES, "samples": BOTTOM_N, "base": BASE},
     }
 
 @router.post("/api/crypto-analysis/analysis")
@@ -105,7 +108,11 @@ SYSTEM_PROMPT = (
     "clusters, but often reverses after sweeping them. The default weights come from a backtest "
     "on 10 large coins: on 4h and above the criteria had a small but real edge (strongest: BTC "
     "context, momentum, EMA trend, volume); on 5m-30m none of them predicted the next candles, "
-    "so say the score is weak evidence there. An ADX below the threshold means "
+    "so say the score is weak evidence there. The bottom readings are measured hit rates, not "
+    "predictions: of the past times a coin sat at a 7-day (4h) or 60-day (1d) low with that many "
+    "bottom signs (RSI, MACD, volume), that share of lows held; the cycle checklist is only a "
+    "count of conditions (Binance history has two cycle bottoms) and is weaker for altcoins, which "
+    "rarely revisit their old high. An ADX below the threshold means "
     "'ranging' whatever the score. Explain the analysis below when the user asks about it, and "
     "answer general crypto questions from your own knowledge. Be concise and neutral. Never "
     "give financial advice; when asked whether to buy or sell, explain what the indicators say "
@@ -127,6 +134,21 @@ def _analysis_context(a: dict) -> str:
         f"Indicators: RSI {i['rsi']}, ADX {i['adx']}, MACD hist {i['macd_hist']}, EMA fast {i['ema_fast']}, "
         f"EMA slow {i['ema_slow']}, funding {i['funding_pct']}%/8h, OI change {i['oi_change_pct']}%"
     )
+    b = a.get("bottoms") or {}
+    for key in ("short", "mid"):
+        h = b.get(key)
+        if not h:
+            continue
+        signs = ", ".join(x["name"] for x in h["signs"] if x["ok"]) or "none"
+        if h["at_low"]:
+            lines.append(f"{h['name']} ({h['tf']}, {h['days']}-day low): price is at it ({h['low']}). {h['count']} bottom signs ({signs}); "
+                         f"historically {h['rate']:.0%} of such lows held {h['days']} days (all {h['days']}-day lows: {h['base']:.0%})")
+        else:
+            lines.append(f"{h['name']} ({h['tf']}): not at a {h['days']}-day low, price {h['above_low_pct']:+.1f}% above it ({h['span_low']}). Bottom signs: {signs}")
+    cy = b.get("cycle")
+    if cy:
+        lines.append(f"Cycle-bottom checklist (weekly): {cy['met']}/{len(cy['conditions'])} met - "
+                     + "; ".join(f"{x['name']}: {'yes' if x['ok'] else 'n/a' if x['ok'] is None else 'no'} ({x['detail']})" for x in cy["conditions"]))
     lines += [f"Warning: {w}" for w in a["warnings"]]
     return "\n".join(lines)
 

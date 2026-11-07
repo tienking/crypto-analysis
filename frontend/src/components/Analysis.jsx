@@ -211,6 +211,8 @@ export default function Analysis({ request, onAnalyzed }) {
 
       {data?.liquidation && <Liquidation liq={data.liquidation} narrow={narrow} />}
 
+      {data?.bottoms && (data.bottoms.short || data.bottoms.mid || data.bottoms.cycle) && <Bottoms b={data.bottoms} narrow={narrow} />}
+
       {data && (
         <section style={panel} aria-label="Bảng tiêu chí">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -396,6 +398,118 @@ function Liquidation({ liq, narrow }) {
         </p>
       </div>
     </section>
+  );
+}
+
+const CYCLE_LEVEL = { high: "Nhiều dấu hiệu đáy chu kỳ", some: "Một vài dấu hiệu đáy chu kỳ", low: "Chưa có dấu hiệu đáy chu kỳ" };
+
+/**
+ * Bottom signals. Short (4h) and mid (1d) show a measured hit rate: of the past times a coin sat
+ * at a 7-day / 60-day low with this many signs, the share of lows that held. The cycle part is a
+ * checklist only (two cycle bottoms in Binance history are too few for a rate).
+ */
+function Bottoms({ b, narrow }) {
+  return (
+    <section style={panel} aria-label="Dấu hiệu đáy">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16 }}>Dấu hiệu đáy</h3>
+        <span style={label}>RSI · MACD · Volume · đo trên 10 coin lớn từ 2017</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+        {b.short && <BottomHorizon h={b.short} />}
+        {b.mid && <BottomHorizon h={b.mid} />}
+        {b.cycle && <BottomCycle c={b.cycle} />}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 12 }}>
+        Tỉ lệ là thống kê quá khứ, không phải dự báo: trong những lần giá nằm ở đáy 7 ngày (nến 4H) hoặc 60 ngày (nến 1D)
+        với cùng số dấu hiệu như bây giờ, bao nhiêu phần trăm lần đáy đó không bị thủng trong 7 hoặc 60 ngày sau.
+        Tính trên nến đã đóng.
+      </p>
+    </section>
+  );
+}
+
+const box = { border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "grid", gap: 10, alignContent: "start", minWidth: 0 };
+
+function Mark({ ok }) {
+  const [ch, color, text] = ok == null ? ["–", "var(--na)", "không đủ dữ liệu"] : ok ? ["✓", "var(--up)", "có"] : ["○", "var(--text-muted)", "chưa"];
+  return <span aria-label={text} style={{ ...num, color, fontWeight: 700, width: 14, display: "inline-block", textAlign: "center", flex: "none" }}>{ch}</span>;
+}
+
+function BottomHorizon({ h }) {
+  const rate = h.rate == null ? null : Math.round(h.rate * 100), base = Math.round(h.base * 100);
+  return (
+    <div style={box} data-horizon={h.key}>
+      <div style={label}>{h.name} · nến {h.tf.toUpperCase()} · đáy {h.days} ngày</div>
+      {h.at_low ? (<>
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <b style={{ ...num, fontSize: 30, lineHeight: 1 }}>{rate}%</b>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>giữ được {h.days} ngày</span>
+          </div>
+          <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.45 }}>
+            Giá đang ở đáy {h.days} ngày (<span style={num}>{fp(h.low)}</span>).
+          </div>
+        </div>
+        <div aria-hidden="true">
+          <div style={{ position: "relative", height: 8, borderRadius: 4, background: "var(--border)" }}>
+            <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${rate}%`, borderRadius: 4, background: "var(--accent)" }} />
+            <span style={{ position: "absolute", left: `${base}%`, top: -3, width: 2, height: 14, background: "var(--text)", borderRadius: 1 }} />
+          </div>
+          <div style={{ ...num, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            <span>0%</span><span>vạch: trung bình {base}%</span><span>100%</span>
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45 }}>
+          Trung bình mọi lần ở đáy {h.days} ngày: {base}%. Tỉ lệ {rate}% đo trên {h.samples} lần có {Math.min(h.count, 3)}{h.count >= 3 ? "+" : ""} dấu hiệu.
+        </div>
+        {h.broken && <div style={{ background: "var(--warn-soft)", color: "var(--warn)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>Nến đang chạy đã xuống dưới mức này: đáy đang được tạo lại.</div>}
+      </>) : (
+        <div>
+          <b style={{ ...num, fontSize: 30, lineHeight: 1, color: "var(--text-muted)" }}>—</b>
+          <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.45 }}>
+            Chưa ở đáy {h.days} ngày: giá cao hơn đáy {h.days} ngày (<span style={num}>{fp(h.span_low)}</span>) <b style={num}>{pct(h.above_low_pct, 1)}</b>.
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Tỉ lệ chỉ được tính khi giá đang ở đáy.</div>
+        </div>
+      )}
+      <ul style={{ listStyle: "none", display: "grid", gap: 4, fontSize: 13 }} aria-label={`${h.count}/4 dấu hiệu đáy`}>
+        {h.signs.map(x => <li key={x.id} style={{ display: "flex", gap: 6, color: x.ok ? "var(--text)" : "var(--text-muted)" }}><Mark ok={x.ok} />{x.name}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function BottomCycle({ c }) {
+  const detail = {
+    drawdown: `Đang ${pct(c.drawdown_pct, 0)} so với đỉnh ${fp(c.ath)}`,
+    rsi: `RSI tuần thấp nhất ${c.lookback} tuần: ${c.rsi_min.toFixed(0)}`,
+    ma200: c.ma200 == null ? "Chưa đủ 200 tuần dữ liệu" : `MA200 tuần: ${fp(c.ma200)}`,
+    capitulation: `Trong ${c.lookback} tuần gần nhất`,
+  };
+  return (
+    <div style={box} data-horizon="cycle">
+      <div style={label}>Đáy chu kỳ · nến tuần</div>
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <b style={{ ...num, fontSize: 30, lineHeight: 1 }}>{c.met}/{c.conditions.length}</b>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>điều kiện</span>
+        </div>
+        <div style={{ fontSize: 13, marginTop: 4, fontWeight: 600, color: c.level === "high" ? "var(--accent)" : "var(--text)" }}>{CYCLE_LEVEL[c.level]}</div>
+      </div>
+      <ul style={{ listStyle: "none", display: "grid", gap: 6, fontSize: 13 }}>
+        {c.conditions.map(x => (
+          <li key={x.id} style={{ display: "flex", gap: 6, color: x.ok ? "var(--text)" : "var(--text-muted)" }}>
+            <Mark ok={x.ok} />
+            <span style={{ minWidth: 0 }}>{x.name}<br /><small style={{ fontSize: 11, color: "var(--text-muted)" }}>{detail[x.id] || x.detail}</small></span>
+          </li>
+        ))}
+      </ul>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45 }}>
+        Chỉ là checklist, không phải xác suất: lịch sử Binance mới có 2 đáy chu kỳ. BTC đạt 4/5 quanh đáy 12/2018 và trong 6–12/2022.
+        Với altcoin, điều kiện "giảm ≥ 70%" hay đúng kéo dài vì ít khi quay lại đỉnh cũ.
+      </div>
+    </div>
   );
 }
 

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from .binance import BinanceClient
 from .config import BTC_SYMBOL, CHART_CANDLES, HIGHER_TF, LIQ_PERIOD, QUOTE, Thresholds, Weights
+from .bottoms import HORIZONS, cycle_view, horizon_view
 from .criteria import Candles, Context, score
 from .liquidation import liquidation_map, pull
 
@@ -48,6 +49,21 @@ def _liq_map(oi_hist, krows, t: Thresholds) -> dict | None:
     return liquidation_map(oi, high, low, close, close[-1], t.liq_range_pct)
 
 
+def _bottoms(rows: dict, weekly) -> dict:
+    """Bottom readings per horizon + the cycle checklist; any part may be None (no data)."""
+    out = {}
+    for key, r in rows.items():
+        try:
+            out[key] = horizon_view(Candles.from_klines(r[0]), key) if r and len(r[0]) else None
+        except Exception:  # noqa: BLE001 — optional, never breaks the analysis
+            out[key] = None
+    try:
+        out["cycle"] = cycle_view(Candles.from_klines(weekly[0])) if weekly and len(weekly[0]) else None
+    except Exception:  # noqa: BLE001
+        out["cycle"] = None
+    return out
+
+
 def _clean(arr) -> list:
     return [None if (v is None or (isinstance(v, float) and math.isnan(v))) else round(float(v), 10) for v in arr]
 
@@ -74,7 +90,12 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
     oi_task = client.oi_change(symbol, tf, thresholds.vol_lookback)
     oih_task = client.oi_history(symbol, LIQ_PERIOD[tf])
     fk_task = client.futures_klines(symbol, LIQ_PERIOD[tf])
-    htf, btc, funding, oi, oi_hist, fk = await asyncio.gather(htf_task, btc_task, fund_task, oi_task, oih_task, fk_task)
+    # Bottom signals use fixed timeframes (4h, 1d, 1w) whatever the one on screen; the same
+    # limit as above lets the cache serve the 4h/1d requests when they are already fetched.
+    bt_tasks = [safe(client.klines(symbol, HORIZONS[k]["tf"], limit)) for k in HORIZONS]
+    wk_task = safe(client.klines(symbol, "1w", 1000))
+    htf, btc, funding, oi, oi_hist, fk, *bt, wk = await asyncio.gather(
+        htf_task, btc_task, fund_task, oi_task, oih_task, fk_task, *bt_tasks, wk_task)
 
     candles = Candles.from_klines(rows)
     try:
@@ -93,6 +114,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
         is_btc=is_btc, funding=funding, oi_change=oi, liq=liq,
     )
     result = score(ctx, weights)
+    bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk)
     if tf in SHORT_TF_NO_EDGE:
         result["warnings"].append(
             f"Khung {tf}: backtest trên 10 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "
@@ -118,6 +140,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
         },
         **result,
         "liquidation": liq,
+        "bottoms": bottoms,
         "chart": {
             "time": candles.time[sl].tolist(),
             "open": _clean(candles.open[sl]), "high": _clean(candles.high[sl]),

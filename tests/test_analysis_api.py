@@ -97,6 +97,23 @@ def test_uptrend_scores_positive(client):
     assert all(b["short"] == 0 for b in liq["bins"] if b["price"] + half_bin < p)
 
 
+def test_bottoms_in_the_response_and_the_chat_context(client):
+    d = client(-0.004).post(URL, json={"symbol": "ETH", "timeframe": "1h"}).json()
+    b = d["bottoms"]
+    assert b["short"]["tf"] == "4h" and b["mid"]["tf"] == "1d"
+    assert b["short"]["at_low"] and b["short"]["rate"] is not None
+    assert b["cycle"]["available"] == 5 and len(b["cycle"]["conditions"]) == 5
+    ctx = api._analysis_context(d)
+    assert "Đáy ngắn hạn" in ctx and "Cycle-bottom checklist" in ctx
+
+
+def test_bottoms_fail_soft(client, monkeypatch):
+    import analysis.service as svc
+    monkeypatch.setattr(svc, "cycle_view", lambda w: 1 / 0)
+    d = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "1h"}).json()
+    assert d["bottoms"]["cycle"] is None and d["bottoms"]["short"] is not None
+
+
 def test_no_futures_marks_liquidation_na(client):
     d = client(0.004, futures=False).post(URL, json={"symbol": "sol", "timeframe": "1h"}).json()
     assert d["liquidation"] is None
