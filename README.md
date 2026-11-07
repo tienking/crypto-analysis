@@ -1,7 +1,7 @@
 # Crypto Analysis
 
 A coin trend scorer. A TradingView market chart sits on top; below it, any coin is scored
-from **−100 to +100** with **7 weighted technical criteria** on live Binance data, with a
+from **−100 to +100** with **8 weighted technical criteria** on live Binance data, with a
 verdict, the indicators behind it, and an AI assistant that explains the analysis on screen.
 The analysis UI is in Vietnamese.
 
@@ -16,7 +16,8 @@ The analysis UI is in Vietnamese.
    Picking a pair on the chart analyses that coin below.
 2. **Analysis** — the backend pulls Binance public market data (no API key): candles for the
    timeframe and the next higher one, BTC candles, funding rate and open-interest change.
-   It computes EMA, RSI (Wilder), MACD, ADX and price pivots with numpy, then scores 7
+   It computes EMA, RSI (Wilder), MACD, ADX and price pivots with numpy, builds an estimated
+   liquidation map from open-interest history, then scores 8
    criteria, each giving a signal in `[-1, 1]` (or no data):
 
    | Criterion | Weight | Bullish when |
@@ -24,15 +25,28 @@ The analysis UI is in Vietnamese.
    | Higher-timeframe agreement | 20 | EMA trend up on the higher timeframe (15m→1h, 1h→4h, 4h→1d, 1d→1w) |
    | EMA trend | 20 | Price > EMA50 > EMA200 |
    | Price structure | 15 | Higher high + higher low, or a break of the last pivot high |
-   | Momentum | 15 | RSI ≥ 50 and rising; MACD histogram positive and widening |
+   | Momentum | 10 | RSI ≥ 50 and rising; MACD histogram positive and widening |
    | Volume confirmation | 10 | Green-candle volume ≥ 1.2× red over 20 candles |
-   | Derivatives | 10 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
+   | Derivatives | 5 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
    | BTC context | 10 | BTC's EMA trend up on the same timeframe (n/a when analysing BTC) |
+| Liquidation zones (estimated) | 10 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
 
    **Score = 100 × Σ(weight × signal) / Σ weight** of the criteria that have data. ADX14 below
    20 makes the verdict **ranging** whatever the score; otherwise ≥ 50 strong up, ≥ 20 lean up,
    mirrored for down. Warnings (no points): RSI overbought/oversold, negative funding (short
-   squeeze risk), higher timeframe against the current one.
+   squeeze risk), higher timeframe against the current one, the biggest liquidation cluster
+   within 1% (likely sweep then reversal).
+
+   **Liquidation map** (`analysis/liquidation.py`): Binance publishes none, so it is a model, like
+   the public heatmaps. Open-interest history (500 points of `openInterestHist`: 15m for the 15m
+   timeframe, 1h for 1h/4h, 4h for 1d) is aligned with futures candles. Each OI rise = new
+   positions at the candle's typical price, one long and one short per contract, spread over
+   10x/25x/50x/100x (30/30/25/15%); a long liquidates near `entry × (1 − 1/L + 0.4%)`, a short
+   near `entry × (1 + 1/L − 0.4%)`. A level is removed once a later candle trades through it; an
+   OI fall shrinks every open level pro rata. What remains is binned in 0.25% steps within
+   ±`liq_range_pct`. Pull of a side = Σ USD / distance% (floor 0.2%); the signal is
+   `(up − down) / (up + down)`: ±1 from 2 × `liq_imbalance`, ±0.5 from `liq_imbalance`. The page
+   draws the map (shorts above in green, longs below in red) with the biggest cluster per side.
 3. **Settings** — visitors can change every threshold and weight; they are kept in their
    browser (`localStorage`: `ca-thresholds`, `ca-weights`, `ca-last`) and sent with each
    request. The analysis refreshes every 60 s (can be turned off).
@@ -44,8 +58,9 @@ The analysis UI is in Vietnamese.
    password. Stored in MongoDB (`settings` collection).
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
-USDⓈ-M futures; funding and open interest from `fapi.binance.com`. Missing optional data
-(higher timeframe, BTC, funding, OI) only marks that criterion "no data". ⚠️ Binance blocks
+USDⓈ-M futures; funding, open interest (change + history) and futures candles for the
+liquidation map from `fapi.binance.com` (up to 7 requests per analysis, 15 s cache). Missing
+optional data (higher timeframe, BTC, funding, OI) only marks that criterion "no data". ⚠️ Binance blocks
 US IPs (HTTP 451): the server must run outside the US.
 
 ---
@@ -73,7 +88,8 @@ crypto-analysis/
 │   ├── binance.py           # Binance client: host fallback, TTL cache, SymbolNotFound / UpstreamError
 │   ├── config.py            # Thresholds, Weights (pydantic, bounded), Vietnamese labels, HIGHER_TF
 │   ├── indicators.py        # Pure numpy: ema, rsi, macd, adx, pivots
-│   ├── criteria.py          # Candles, Context, the 7 crit_* functions, score(), verdict
+│   ├── criteria.py          # Candles, Context, the 8 crit_* functions, score(), verdict
+│   ├── liquidation.py       # Pure numpy liquidation-map model + pull()
 │   └── service.py           # analyze(): parallel fetch → Context → score → JSON (no NaN)
 ├── ai.py                    # Chat dispatcher → Grok or Gemini per AI settings
 ├── grok.py / gemini.py      # Chat clients
@@ -96,7 +112,7 @@ crypto-analysis/
         ├── index.css           # Dark theme, fonts, up/down/warn colours
         ├── components/
         │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
-        │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, criteria, settings
+        │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, liquidation map, criteria, settings
         │   └── ChatPopup.jsx    # AI assistant (bottom-right)
         └── lib/api.js           # API client
 ```
@@ -109,7 +125,7 @@ crypto-analysis/
 |--------|------|-------------|
 | GET | `/api/crypto-analysis/health` | Health check |
 | GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, Vietnamese labels |
-| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs. 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
+| POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
 | GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
 | POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |

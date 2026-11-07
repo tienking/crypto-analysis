@@ -18,7 +18,7 @@ async def health():
     return {"status": "ok", "service": "crypto-analysis"}
 
 
-# ── Coin analysis (7 weighted criteria on Binance data) ────────────────────────
+# ── Coin analysis (8 weighted criteria on Binance data) ────────────────────────
 
 Timeframe = Literal["15m", "1h", "4h", "1d"]
 
@@ -83,9 +83,12 @@ class ChatRequest(BaseModel):
 
 SYSTEM_PROMPT = (
     "You are the AI assistant for 'Crypto Analysis', a site that scores a coin's trend from "
-    "-100 to +100 with 7 weighted technical criteria on Binance data: higher-timeframe "
+    "-100 to +100 with 8 weighted technical criteria on Binance data: higher-timeframe "
     "agreement, EMA trend, price structure, momentum (RSI + MACD), volume confirmation, "
-    "derivatives (open interest + funding) and BTC context. An ADX below the threshold means "
+    "derivatives (open interest + funding), BTC context and estimated liquidation zones. "
+    "The liquidation zones are a model built from Binance open-interest history and an assumed "
+    "leverage mix (10x-100x), not real order data: price tends to be pulled towards large, close "
+    "clusters, but often reverses after sweeping them. An ADX below the threshold means "
     "'ranging' whatever the score. Explain the analysis below when the user asks about it, and "
     "answer general crypto questions from your own knowledge. Be concise and neutral. Never "
     "give financial advice; when asked whether to buy or sell, explain what the indicators say "

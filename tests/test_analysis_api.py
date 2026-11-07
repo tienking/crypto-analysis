@@ -31,8 +31,8 @@ def make_klines(trend: float, n: int = 400, seed: int = 1):
 
 
 class FakeBinance:
-    def __init__(self, trend, down=False):
-        self.trend, self.down = trend, down
+    def __init__(self, trend, down=False, futures=True):
+        self.trend, self.down, self.futures = trend, down, futures
 
     async def klines(self, symbol, interval, limit=400):
         if self.down:
@@ -47,6 +47,14 @@ class FakeBinance:
     async def oi_change(self, symbol, period, lookback):
         return 5.0
 
+    async def oi_history(self, symbol, period, limit=500):
+        if not self.futures:
+            return None
+        return [(i * 3_600_000, 1000.0 + 5 * i) for i in range(limit)]   # OI keeps rising
+
+    async def futures_klines(self, symbol, interval, limit=500):
+        return make_klines(self.trend, limit) if self.futures else None
+
 
 @pytest.fixture
 def client():
@@ -54,8 +62,8 @@ def client():
     app = FastAPI()
     app.include_router(api.router)
 
-    def make(trend=0.004, down=False):
-        app.state.binance = FakeBinance(trend, down)
+    def make(trend=0.004, down=False, futures=True):
+        app.state.binance = FakeBinance(trend, down, futures)
         return TestClient(app)
     return make
 
@@ -65,7 +73,20 @@ def test_uptrend_scores_positive(client):
     assert r.status_code == 200, r.text
     d = r.json()
     assert d["symbol"] == "SOLUSDT" and d["score"] > 20
-    assert len(d["criteria"]) == 7 and len(d["chart"]["close"]) == 120
+    assert len(d["criteria"]) == 8 and len(d["chart"]["close"]) == 120
+    liq = d["liquidation"]
+    assert liq and liq["period"] == "1h" and len(liq["bins"]) == 40
+    # swept levels are gone: longs only wait below the price, shorts only above
+    p, half_bin = liq["price"], liq["price"] * liq["bin_pct"] / 200   # the middle bins straddle p
+    assert any(b["long"] > 0 for b in liq["bins"])
+    assert all(b["long"] == 0 for b in liq["bins"] if b["price"] - half_bin > p)
+    assert all(b["short"] == 0 for b in liq["bins"] if b["price"] + half_bin < p)
+
+
+def test_no_futures_marks_liquidation_na(client):
+    d = client(0.004, futures=False).post(URL, json={"symbol": "sol", "timeframe": "1h"}).json()
+    assert d["liquidation"] is None
+    assert next(c for c in d["criteria"] if c["id"] == "liquidation")["status"] == "na"
 
 
 def test_downtrend_scores_negative(client):
@@ -95,13 +116,13 @@ def test_invalid_overrides_422(client):
 def test_weight_override_changes_score():
     ctx = Context(c=Candles.from_klines(make_klines(0.004)), t=Thresholds(), funding=0.01, oi_change=-10.0, is_btc=True)
     base = score(ctx, Weights())["score"]
-    only_trend = score(ctx, Weights(htf=0, trend=100, structure=0, momentum=0, volume=0, derivatives=0, btc=0))["score"]
+    only_trend = score(ctx, Weights(htf=0, trend=100, structure=0, momentum=0, volume=0, derivatives=0, btc=0, liquidation=0))["score"]
     assert only_trend == 100.0 and base <= 100.0
 
 
 def test_config_endpoint(client):
     d = client().get(URL + "/config").json()
-    assert set(d["weights"]) == {"htf", "trend", "structure", "momentum", "volume", "derivatives", "btc"}
+    assert set(d["weights"]) == {"htf", "trend", "structure", "momentum", "volume", "derivatives", "btc", "liquidation"}
     assert sum(d["weights"].values()) == 100
 
 
@@ -122,7 +143,7 @@ def test_chat_gets_the_analysis_as_context(client, monkeypatch):
         "message": "Vì sao điểm cao?", "analysis": {"symbol": "SOL", "timeframe": "1h"}})
     assert r.json() == {"reply": "ok", "provider": "fake"}
     assert "=== ANALYSIS ON SCREEN ===" in seen["system"] and "SOLUSDT" in seen["system"]
-    assert seen["system"].count("\n- ") == 7  # one line per criterion
+    assert seen["system"].count("\n- ") == 8  # one line per criterion
     assert seen["conversation"][-1] == {"role": "user", "content": "Vì sao điểm cao?"}
 
 

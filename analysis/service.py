@@ -7,8 +7,9 @@ import re
 from datetime import datetime, timezone
 
 from .binance import BinanceClient
-from .config import BTC_SYMBOL, CHART_CANDLES, HIGHER_TF, QUOTE, Thresholds, Weights
+from .config import BTC_SYMBOL, CHART_CANDLES, HIGHER_TF, LIQ_PERIOD, QUOTE, Thresholds, Weights
 from .criteria import Candles, Context, score
+from .liquidation import liquidation_map, pull
 
 
 def normalize_symbol(raw: str) -> str:
@@ -18,6 +19,29 @@ def normalize_symbol(raw: str) -> str:
     if len(s) < 2:
         raise ValueError("Mã coin cần ít nhất 2 ký tự.")
     return s + QUOTE
+
+
+def _liq_map(oi_hist, krows, t: Thresholds) -> dict | None:
+    """Align OI points with futures candles by open time, then build the liquidation map.
+
+    The map is centred on the futures price (the levels come from futures candles). Candles
+    newer than the last OI point carry the last OI forward, so the live candle still sweeps.
+    """
+    if not oi_hist or not krows:
+        return None
+    oi_at = dict(oi_hist)
+    first = next((i for i, r in enumerate(krows) if int(r[0]) in oi_at), None)
+    if first is None:
+        return None
+    oi, last = [], None
+    for r in krows[first:]:
+        last = oi_at.get(int(r[0]), last)
+        oi.append(last)
+    if len(oi) < 50:
+        return None
+    rows = krows[first:]
+    high, low, close = ([float(r[k]) for r in rows] for k in (2, 3, 4))
+    return liquidation_map(oi, high, low, close, close[-1], t.liq_range_pct)
 
 
 def _clean(arr) -> list:
@@ -44,14 +68,25 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
     btc_task = safe(client.klines(BTC_SYMBOL, tf, limit)) if not is_btc else asyncio.sleep(0, None)
     fund_task = client.funding(symbol)
     oi_task = client.oi_change(symbol, tf, thresholds.vol_lookback)
-    htf, btc, funding, oi = await asyncio.gather(htf_task, btc_task, fund_task, oi_task)
+    oih_task = client.oi_history(symbol, LIQ_PERIOD[tf])
+    fk_task = client.futures_klines(symbol, LIQ_PERIOD[tf])
+    htf, btc, funding, oi, oi_hist, fk = await asyncio.gather(htf_task, btc_task, fund_task, oi_task, oih_task, fk_task)
 
     candles = Candles.from_klines(rows)
+    try:
+        liq = _liq_map(oi_hist, fk, thresholds)
+    except Exception:  # noqa: BLE001 — optional, like the other futures data
+        liq = None
+    if liq is not None:
+        up, down, top_s, top_l = pull(liq)
+        top = lambda x: None if x is None else {"price": x[0], "usd": x[1], "dist_pct": (x[0] / liq["price"] - 1) * 100}  # noqa: E731
+        liq.update(period=LIQ_PERIOD[tf], pull_up=(up / (up + down) if up + down else None),
+                   top_short=top(top_s), top_long=top(top_l))
     ctx = Context(
         c=candles, t=thresholds,
         htf=Candles.from_klines(htf[0]) if htf and len(htf[0]) > 0 else None,
         btc=Candles.from_klines(btc[0]) if btc and len(btc[0]) > 0 else None,
-        is_btc=is_btc, funding=funding, oi_change=oi,
+        is_btc=is_btc, funding=funding, oi_change=oi, liq=liq,
     )
     result = score(ctx, weights)
 
@@ -74,6 +109,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
             "oi_change_pct": oi,
         },
         **result,
+        "liquidation": liq,
         "chart": {
             "time": candles.time[sl].tolist(),
             "open": _clean(candles.open[sl]), "high": _clean(candles.high[sl]),

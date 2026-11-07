@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { analyzeCoin, fetchAnalysisConfig } from "../lib/api";
 
-// Coin trend score: 7 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
+// Coin trend score: 8 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
 // UI text is Vietnamese. API data is only ever rendered as text, never as HTML.
 
 const TIMEFRAMES = [["15m", "15m"], ["1h", "1H"], ["4h", "4H"], ["1d", "1D"]];
@@ -139,7 +139,7 @@ export default function Analysis({ request, onAnalyzed }) {
     <section aria-label="Phân tích xu hướng coin" style={{ display: "grid", gap: 16 }}>
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>Phân tích xu hướng</h2>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>7 tiêu chí kỹ thuật có trọng số · điểm từ −100 đến +100 · dữ liệu Binance</p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>8 tiêu chí kỹ thuật có trọng số · điểm từ −100 đến +100 · dữ liệu Binance</p>
       </div>
 
       {/* Controls */}
@@ -192,6 +192,8 @@ export default function Analysis({ request, onAnalyzed }) {
           </div>
         </div>
       )}
+
+      {data?.liquidation && <Liquidation liq={data.liquidation} narrow={narrow} />}
 
       {data && (
         <section style={panel} aria-label="Bảng tiêu chí">
@@ -263,6 +265,107 @@ function Verdict({ d, narrow }) {
           {d.warnings.map(w => <li key={w} style={{ background: "var(--warn-soft)", color: "var(--warn)", borderRadius: 8, padding: "6px 10px", fontSize: 13, fontWeight: 600 }}>{w}</li>)}
         </ul>
       )}
+    </section>
+  );
+}
+
+const usd = v => {
+  const a = Math.abs(v);
+  return a >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : a >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+};
+
+/**
+ * Estimated liquidation map: one row per price bin (high prices on top), shorts waiting above
+ * the price (green: their forced buys pull price up), longs below (red). Hover = exact values.
+ */
+function Liquidation({ liq, narrow }) {
+  const [hover, setHover] = useState(null);
+  const bins = [...liq.bins].reverse();                 // top row = highest price
+  const max = Math.max(...bins.map(b => Math.max(b.long, b.short)), 1);
+  const rowH = narrow ? 6 : 7, H = bins.length * rowH;
+  const p = liq.price;
+  const priceY = bins.findIndex(b => b.price < p);     // first bin under the price
+  const ticks = bins.map((b, i) => ({ b, i })).filter(({ i }) => i % 4 === 0);
+  const tops = [liq.top_short, liq.top_long].filter(Boolean).map(t => t.price);
+  const hb = hover == null ? null : bins[hover];
+  const onMove = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.floor((e.clientY - r.top) / rowH);
+    setHover(i >= 0 && i < bins.length ? i : null);
+  };
+  const side = (t, name, color) => (
+    <div>
+      <div style={label}>Cụm {name} lớn nhất</div>
+      {t ? (<>
+        <div style={{ ...num, fontWeight: 700, fontSize: 16 }}>{fp(t.price)}</div>
+        <div style={{ ...num, fontSize: 12, color: "var(--text-muted)" }}>
+          <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: color, marginRight: 6 }} />
+          {usd(t.usd)} · cách {pct(t.dist_pct, 1)}
+        </div>
+      </>) : <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Không có trong ±{liq.range_pct}%</div>}
+    </div>
+  );
+  const up = liq.pull_up;
+  return (
+    <section style={{ ...panel, display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "minmax(0,1.6fr) minmax(0,1fr)", gap: 16 }} aria-label="Vùng thanh lý ước tính">
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <span style={label}>Vùng thanh lý ước tính · ±{liq.range_pct}%</span>
+          <span style={{ display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>
+            <Legend color="var(--up)" text="Short (phía trên)" />
+            <Legend color="var(--down)" text="Long (phía dưới)" />
+          </span>
+        </div>
+        <div style={{ position: "relative", height: H, marginRight: 76 }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} aria-hidden="true">
+          {bins.map((b, i) => {
+            const v = b.short || b.long, isShort = b.short >= b.long;
+            return (
+              <div key={b.price} style={{ position: "absolute", left: 0, right: 0, top: i * rowH, height: rowH, background: hover === i ? "var(--border)" : "transparent" }}>
+                {v > 0 && <span style={{ position: "absolute", left: 0, top: 1, height: rowH - 2, width: `${Math.max(v / max * 100, 0.6)}%`, borderRadius: "0 2px 2px 0", background: isShort ? "var(--up)" : "var(--down)", opacity: hover == null || hover === i ? 1 : 0.55 }} />}
+              </div>
+            );
+          })}
+          {priceY > 0 && (
+            <div style={{ position: "absolute", left: 0, right: -76, top: priceY * rowH, borderTop: "1px dashed var(--text-muted)" }}>
+              <b style={{ ...num, position: "absolute", right: 0, top: -9, background: "var(--text)", color: "var(--bg)", fontSize: 11, padding: "1px 6px", borderRadius: 4 }}>{fp(p)}</b>
+            </div>
+          )}
+          {ticks.map(({ b, i }) => Math.abs(i - priceY) > 1 && (
+            <span key={"t" + i} style={{ ...num, position: "absolute", right: -76, width: 70, top: i * rowH - 6, fontSize: 10, color: tops.includes(b.price) ? "var(--text)" : "var(--text-muted)" }}>{fp(b.price)}</span>
+          ))}
+          {hb && (hb.long > 0 || hb.short > 0) && (
+            <div style={{ position: "absolute", left: 8, top: Math.min(hover * rowH + 10, H - 52), background: "var(--bg)", border: "1px solid var(--border-hover)", borderRadius: 8, padding: "6px 9px", fontSize: 12, pointerEvents: "none", whiteSpace: "nowrap", zIndex: 1 }}>
+              <div style={{ ...num, fontWeight: 700 }}>~{fp(hb.price)} <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({pct((hb.price / p - 1) * 100, 2)})</span></div>
+              <div style={{ color: "var(--text-muted)" }}>{hb.short > 0 ? "Short" : "Long"} chờ thanh lý: <b style={{ ...num, color: "var(--text)" }}>{usd(hb.short || hb.long)}</b></div>
+            </div>
+          )}
+        </div>
+        <table style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+          <caption>Vùng thanh lý ước tính theo mức giá</caption>
+          <thead><tr><th>Giá</th><th>Long</th><th>Short</th></tr></thead>
+          <tbody>{bins.filter(b => b.long || b.short).map(b => <tr key={b.price}><td>{fp(b.price)}</td><td>{usd(b.long)}</td><td>{usd(b.short)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
+        {side(liq.top_short, "short", "var(--up)")}
+        {side(liq.top_long, "long", "var(--down)")}
+        {up != null && (
+          <div>
+            <div style={label}>Lực hút (lớn và gần thì mạnh)</div>
+            <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", gap: 2, marginTop: 6 }}>
+              <span style={{ flex: up, background: "var(--up)" }} />
+              <span style={{ flex: 1 - up, background: "var(--down)" }} />
+            </div>
+            <div style={{ ...num, display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 4 }}>
+              <span>▲ lên {(up * 100).toFixed(0)}%</span><span>▼ xuống {((1 - up) * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        )}
+        <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          Ước tính từ lịch sử Open Interest Binance (khung {liq.period}) với đòn bẩy giả định 10x–100x, không phải lệnh thật.
+          Giá thường bị hút về cụm lớn và gần, nhưng hay đảo chiều sau khi quét xong.
+        </p>
+      </div>
     </section>
   );
 }

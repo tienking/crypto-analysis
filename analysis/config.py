@@ -9,6 +9,9 @@ QUOTE = "USDT"
 BTC_SYMBOL = "BTCUSDT"
 CHART_CANDLES = 120
 CACHE_TTL_SECONDS = 15
+# Open-interest period behind the liquidation map (500 points; Binance keeps 30 days):
+# 15m -> ~5 days, 1h/4h -> ~21 days, 1d -> 30 days.
+LIQ_PERIOD = {"15m": "15m", "1h": "1h", "4h": "1h", "1d": "4h"}
 
 
 class Thresholds(BaseModel):
@@ -26,16 +29,19 @@ class Thresholds(BaseModel):
     adx_trend_min: float = Field(20, ge=0, le=50)
     score_strong: float = Field(50, ge=1, le=100)
     score_lean: float = Field(20, ge=1, le=100)
+    liq_range_pct: float = Field(5, ge=1, le=15, description="± % around price")
+    liq_imbalance: float = Field(0.25, ge=0.05, le=0.9, description="min |up-down|/(up+down)")
 
 
 class Weights(BaseModel):
     htf: float = Field(20, ge=0)
     trend: float = Field(20, ge=0)
     structure: float = Field(15, ge=0)
-    momentum: float = Field(15, ge=0)
+    momentum: float = Field(10, ge=0)
     volume: float = Field(10, ge=0)
-    derivatives: float = Field(10, ge=0)
+    derivatives: float = Field(5, ge=0)
     btc: float = Field(10, ge=0)
+    liquidation: float = Field(10, ge=0)
 
 
 CRITERIA_META = {
@@ -46,6 +52,7 @@ CRITERIA_META = {
     "volume": "Volume xác nhận",
     "derivatives": "Phái sinh (OI + Funding)",
     "btc": "Bối cảnh BTC",
+    "liquidation": "Vùng thanh lý (ước tính)",
 }
 
 THRESHOLD_LABELS = {
@@ -63,4 +70,6 @@ THRESHOLD_LABELS = {
     "adx_trend_min": "ADX tối thiểu để có xu hướng",
     "score_strong": "Điểm 'mạnh' từ",
     "score_lean": "Điểm 'nghiêng' từ",
+    "liq_range_pct": "Phạm vi xét vùng thanh lý (±%)",
+    "liq_imbalance": "Chênh lệch lực hút tối thiểu (0–1)",
 }

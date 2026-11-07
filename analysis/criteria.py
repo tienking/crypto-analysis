@@ -11,6 +11,7 @@ import numpy as np
 
 from . import indicators as ind
 from .config import CRITERIA_META, Thresholds, Weights
+from .liquidation import pull
 
 
 @dataclass
@@ -58,6 +59,7 @@ class Context:
     is_btc: bool = False
     funding: float | None = None
     oi_change: float | None = None
+    liq: dict | None = None  # liquidation_map() output
     ema_fast: np.ndarray = field(init=False)
     ema_slow: np.ndarray = field(init=False)
     rsi: np.ndarray = field(init=False)
@@ -78,6 +80,14 @@ class Context:
 
 def _ok(x) -> bool:
     return x is not None and not (isinstance(x, float) and math.isnan(x))
+
+
+def money(v: float) -> str:
+    a = abs(v)
+    for div, unit in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if a >= div:
+            return f"${v / div:.1f}{unit}"
+    return f"${v:,.0f}"
 
 
 def fmt(p: float) -> str:
@@ -209,7 +219,27 @@ def crit_btc(ctx: Context) -> CriterionResult:
     return CriterionResult("btc", sc, rule, "BTC: " + d)
 
 
-CRITERIA = (crit_htf, crit_trend, crit_structure, crit_momentum, crit_volume, crit_derivatives, crit_btc)
+def crit_liquidation(ctx: Context) -> CriterionResult:
+    t = ctx.t
+    rule = (f"Giá hay bị hút về cụm thanh lý lớn và gần (±{t.liq_range_pct:g}%). Tăng: cụm short phía trên "
+            f"hút mạnh hơn cụm long phía dưới, chênh ≥ {t.liq_imbalance:g} (và ngược lại)")
+    if ctx.liq is None:
+        return CriterionResult("liquidation", None, rule, "Không có lịch sử OI futures để ước tính")
+    up, down, top_s, top_l = pull(ctx.liq)
+    if up + down <= 0:
+        return CriterionResult("liquidation", 0.0, rule, f"Không có cụm thanh lý trong ±{t.liq_range_pct:g}%")
+    p = ctx.liq["price"]
+    side = lambda top, name: (  # noqa: E731
+        f"{name} —" if top is None else f"{name} {fmt(top[0])} ({(top[0] / p - 1) * 100:+.1f}%, {money(top[1])})")
+    s = (up - down) / (up + down)
+    detail = f"{side(top_s, 'Short')} · {side(top_l, 'Long')} · Lực hút lên {up / (up + down):.0%}"
+    a = abs(s)
+    sc = 0.0 if a < t.liq_imbalance else (1.0 if a >= 2 * t.liq_imbalance else 0.5)
+    return CriterionResult("liquidation", sc if s > 0 or sc == 0 else -sc, rule, detail)
+
+
+CRITERIA = (crit_htf, crit_trend, crit_structure, crit_momentum, crit_volume, crit_derivatives, crit_btc,
+            crit_liquidation)
 
 
 def score(ctx: Context, weights: Weights) -> dict:
@@ -237,6 +267,15 @@ def score(ctx: Context, weights: Weights) -> dict:
         warnings.append(f"RSI {r:.1f} trong vùng quá bán, dễ hồi kỹ thuật dù xu hướng còn giảm.")
     if ctx.funding is not None and ctx.funding <= -t.funding_ok_max:
         warnings.append(f"Funding âm ({ctx.funding:.4f}%): phe short đông, có thể xảy ra short squeeze.")
+    if ctx.liq is not None:
+        _, _, top_s, top_l = pull(ctx.liq)
+        tops = [(x, n) for x, n in ((top_s, "short"), (top_l, "long")) if x is not None]
+        if tops:
+            (lv, usd), name = max(tops, key=lambda z: z[0][1])
+            dist = (lv / ctx.liq["price"] - 1) * 100
+            if abs(dist) < 1:
+                warnings.append(f"Cụm thanh lý {name} lớn nhất ({money(usd)}) chỉ cách {dist:+.1f}%: giá có thể "
+                                f"quét nhanh tới {fmt(lv)} rồi đảo chiều, cẩn thận đặt stop gần đó.")
     by_id = {x.id: x for x in results}
     hs, ts = by_id["htf"].score, by_id["trend"].score
     if hs is not None and ts is not None and hs * ts < 0:

@@ -65,6 +65,21 @@ class BinanceClient:
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
             return None
 
+    async def oi_history(self, symbol: str, period: str, limit: int = 500) -> list[tuple[int, float]] | None:
+        """[(timestamp, open interest in base units)], oldest first. None if no futures."""
+        try:
+            d = await self._get(f"{FAPI}/futures/data/openInterestHist",
+                                {"symbol": symbol, "period": period, "limit": limit})
+            return [(int(x["timestamp"]), float(x["sumOpenInterest"])) for x in d]
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return None
+
+    async def futures_klines(self, symbol: str, interval: str, limit: int = 500) -> list | None:
+        try:
+            return await self._get(f"{FAPI}/fapi/v1/klines", {"symbol": symbol, "interval": interval, "limit": limit})
+        except httpx.HTTPError:
+            return None
+
     async def oi_change(self, symbol: str, period: str, lookback: int) -> float | None:
         """% change of open interest value over `lookback` periods."""
         try:
