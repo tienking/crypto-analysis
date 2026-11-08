@@ -130,7 +130,10 @@ The analysis UI and the Admin page are in Vietnamese.
    group, a **chart of every run** (test IC of the weights in effect after the run, per group;
    filled dot = new weights applied, hollow = kept; hover or arrow keys for the values),
    recent runs (test IC now → proposed, applied or why not), **Lock** (runs still
-   propose but apply nothing) and **Roll back** (re-activate the previous set of a group);
+   propose but apply nothing), **Roll back** (re-activate the previous set of a group) and
+   **Chạy backtest ngay** (start the weekly run now: `systemctl start --no-block` on the same
+   unit as the timer, so it runs at low priority, survives closing the browser and never runs
+   twice; the page checks the unit every 20 s and reloads the results when it ends);
    plus the **bottom-signal rates** in use and the last measurement (applied or why kept).
 
 ### Backtest pipeline
@@ -275,6 +278,8 @@ crypto-analysis/
 | GET | `/api/crypto-analysis/admin/weights` | Active + past weight sets per group, last 10 runs, `history` (chart points of the last 104 completed runs), lock state, days of OI archived, `bottoms` (active rate table + last measurement) |
 | PUT | `/api/crypto-analysis/admin/weights/lock` | `{locked}` |
 | POST | `/api/crypto-analysis/admin/weights/rollback` | `{group: short | long}` → re-activate the previous set (400 if none) |
+| GET | `/api/crypto-analysis/admin/backtest` | `{state}`: `running`, `idle`, `failed` (last run failed) or `unavailable` (no systemd) |
+| POST | `/api/crypto-analysis/admin/backtest/run` | Start `crypto-analysis-reweight.service` now (409 if running, 503 without systemd or if the start fails) |
 
 `timeframe` ∈ `5m | 15m | 30m | 1h | 4h | 12h | 1d`; the symbol is normalised to `{BASE}USDT`.
 

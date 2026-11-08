@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { adminLogin, adminGetCoins, adminSaveCoins, adminGetAi, adminSaveAi, adminChangePassword,
-  adminGetWeights, adminLockWeights, adminRollbackWeights } from "./lib/api";
+  adminGetWeights, adminLockWeights, adminRollbackWeights, adminBacktestState, adminBacktestRun } from "./lib/api";
 import RunsChart from "./components/RunsChart";
 
 const SITE_URL = "/projects/crypto-analysis/";
@@ -176,8 +176,27 @@ function WeightsAdmin({ token, flash }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [job, setJob] = useState(null); // systemd state of the backtest unit
   const load = () => adminGetWeights(token).then(setD).catch(e => setErr(e.message));
-  useEffect(() => { load(); }, [token]);
+  const loadJob = () => adminBacktestState(token).then(r => setJob(r.state)).catch(() => setJob("unavailable"));
+  useEffect(() => { load(); loadJob(); }, [token]);
+  // While a run is going: check every 20 s, and reload the results when it ends.
+  useEffect(() => {
+    if (job !== "running") return undefined;
+    const t = setInterval(() => adminBacktestState(token).then(r => {
+      setJob(r.state);
+      if (r.state !== "running") { load(); flash(r.state === "failed" ? "Backtest lỗi, xem log trên máy chủ" : "✓ Backtest đã xong"); }
+    }).catch(() => {}), 20000);
+    return () => clearInterval(t);
+  }, [job, token]);
+
+  const runNow = async () => {
+    if (!window.confirm("Chạy backtest ngay bây giờ? Lần chạy mất khoảng 15–60 phút, chạy nền với mức ưu tiên thấp.")) return;
+    setBusy(true);
+    try { await adminBacktestRun(token); setJob("running"); flash("✓ Đã bắt đầu chạy backtest"); setTimeout(load, 3000); }
+    catch (e) { flash(e.message); loadJob(); }
+    setBusy(false);
+  };
 
   const act = async (fn, ok) => {
     setBusy(true);
@@ -203,9 +222,16 @@ function WeightsAdmin({ token, flash }) {
             {lastRun ? ` · lần chạy gần nhất ${fmtDate(lastRun.started_at)} (${STATUS[lastRun.status] || lastRun.status})` : " · chưa chạy lần nào"}
           </span>
         </div>
-        <button disabled={busy} onClick={() => act(() => adminLockWeights(token, !d.locked), d.locked ? "✓ Đã mở khoá" : "✓ Đã khoá")} style={btn}>
-          {d.locked ? "Mở khoá" : "Khoá trọng số"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button disabled={busy || job === "running" || job === "unavailable"} onClick={runNow}
+            title={job === "unavailable" ? "Máy chủ này không chạy được backtest (không có systemd)" : "Chạy backtest ngay, không chờ sáng Chủ nhật"}
+            style={{ ...btn, opacity: job === "running" || job === "unavailable" ? 0.5 : 1, cursor: job === "running" || job === "unavailable" ? "default" : "pointer" }}>
+            {job === "running" ? "Đang chạy backtest…" : "Chạy backtest ngay"}
+          </button>
+          <button disabled={busy} onClick={() => act(() => adminLockWeights(token, !d.locked), d.locked ? "✓ Đã mở khoá" : "✓ Đã khoá")} style={btn}>
+            {d.locked ? "Mở khoá" : "Khoá trọng số"}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 14 }}>

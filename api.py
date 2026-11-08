@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import List, Dict, Literal, Optional
+import asyncio
 import time
 from database import (get_coins, set_coins, get_admin, set_admin_password,
                       get_ai_settings, set_ai_settings, get_active_weights, get_bottom_rates, get_weights_admin,
@@ -298,6 +299,45 @@ async def admin_rollback_weights(data: WeightsRollback, _: str = Depends(verify_
     return {"ok": True}
 
 
+# ── Admin: run the weekly backtest now ───────────────────────────────────────
+# Starts the same systemd unit as the Sunday timer (low priority, survives the browser closing,
+# one run at a time). Fixed arguments only: nothing from the request reaches the command.
+REWEIGHT_UNIT = "crypto-analysis-reweight.service"
+
+async def _systemctl(*args: str) -> tuple[int, str]:
+    try:
+        p = await asyncio.create_subprocess_exec("systemctl", *args, stdout=asyncio.subprocess.PIPE,
+                                                 stderr=asyncio.subprocess.PIPE)
+        out, err = await asyncio.wait_for(p.communicate(), 15)
+        return p.returncode, (out or err).decode(errors="replace").strip()
+    except (OSError, asyncio.TimeoutError) as e:
+        return -1, str(e) or type(e).__name__
+
+async def backtest_state() -> str:
+    """"running", "idle", "failed" (last run failed) or "unavailable" (no systemd here)."""
+    rc, out = await _systemctl("is-active", REWEIGHT_UNIT)
+    if rc == -1 or not out:
+        return "unavailable"
+    return {"activating": "running", "active": "running", "reloading": "running",
+            "failed": "failed"}.get(out, "idle")
+
+@router.get("/api/crypto-analysis/admin/backtest")
+async def admin_backtest_state(_: str = Depends(verify_admin)):
+    return {"state": await backtest_state()}
+
+@router.post("/api/crypto-analysis/admin/backtest/run")
+async def admin_backtest_run(_: str = Depends(verify_admin)):
+    state = await backtest_state()
+    if state == "running":
+        raise HTTPException(409, "Backtest đang chạy")
+    if state == "unavailable":
+        raise HTTPException(503, "Máy chủ này không có systemd để chạy backtest")
+    rc, out = await _systemctl("start", "--no-block", REWEIGHT_UNIT)
+    if rc != 0:
+        raise HTTPException(503, f"Không khởi động được backtest: {out[:200]}")
+    return {"state": "running"}
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
@@ -308,6 +348,6 @@ async def admin_change_password(data: PasswordChange, _: str = Depends(verify_ad
     if not admin or not check_password(data.current_password, admin.get("hashed_password", "")):
         raise HTTPException(status_code=401, detail="Mật khẩu hiện tại không đúng")
     if len(data.new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+        raise HTTPException(status_code=400, detail="Mật khẩu mới phải có ít nhất 6 ký tự")
     await set_admin_password(hash_password(data.new_password))
     return {"ok": True}

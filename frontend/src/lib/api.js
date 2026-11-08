@@ -68,25 +68,25 @@ export async function adminLogin(username, password) {
 
 export async function adminGetCoins(token) {
   const res = await fetch(`${BASE}/admin/coins`, { headers: authH(token) });
-  if (!res.ok) throw new Error("Failed");
+  if (!res.ok) throw new Error("Không tải được dữ liệu");
   return res.json();
 }
 
 export async function adminSaveCoins(token, items) {
   const res = await fetch(`${BASE}/admin/coins`, { method: "PUT", headers: authH(token), body: JSON.stringify({ items }) });
-  if (!res.ok) throw new Error("Save failed");
+  if (!res.ok) throw new Error("Lưu thất bại");
   return res.json();
 }
 
 export async function adminGetAi(token) {
   const res = await fetch(`${BASE}/admin/ai-settings`, { headers: authH(token) });
-  if (!res.ok) throw new Error("Failed");
+  if (!res.ok) throw new Error("Không tải được dữ liệu");
   return res.json();
 }
 
 export async function adminSaveAi(token, settings) {
   const res = await fetch(`${BASE}/admin/ai-settings`, { method: "PUT", headers: authH(token), body: JSON.stringify(settings) });
-  if (!res.ok) throw new Error("Save failed");
+  if (!res.ok) throw new Error("Lưu thất bại");
   return res.json();
 }
 
@@ -107,7 +107,22 @@ export async function adminGetWeights(token) {
 
 export async function adminLockWeights(token, locked) {
   const res = await fetch(`${BASE}/admin/weights/lock`, { method: "PUT", headers: authH(token), body: JSON.stringify({ locked }) });
-  if (!res.ok) throw new Error("Save failed");
+  if (!res.ok) throw new Error("Lưu thất bại");
+  return res.json();
+}
+
+export async function adminBacktestState(token) {
+  const res = await fetch(`${BASE}/admin/backtest`, { headers: authH(token) });
+  if (!res.ok) throw new Error("Không đọc được trạng thái backtest");
+  return res.json(); // { state: "running" | "idle" | "failed" | "unavailable" }
+}
+
+export async function adminBacktestRun(token) {
+  const res = await fetch(`${BASE}/admin/backtest/run`, { method: "POST", headers: authH(token) });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || "Không khởi động được backtest");
+  }
   return res.json();
 }
 
