@@ -19,7 +19,7 @@ from analysis.config import HIGHER_TF, LIQ_PERIOD, Weights
 
 from . import bybit_hist, engine
 from .bottoms import update as update_bottoms
-from .binance_hist import COINS, Http, funding, klines
+from .binance_hist import COINS, Http, cached_klines, funding, klines
 from .fit import propose
 from .store import DAY_MS, GROUPS, series_from_docs, sync_db
 
@@ -54,11 +54,12 @@ def oi_days(db) -> int:
     return min(counts) if counts else 0
 
 
-def load_price(http) -> dict:
+def load_price(http, db=None) -> dict:
     spot = {}
+    now = int(time.time() * 1000)
     tfs = sorted(set(TFS) | {HIGHER_TF[t] for t in TFS}, key=lambda t: TF_MS.get(t, 10**12))
     for c in COINS:
-        spot[c] = {tf: klines(http, c + "USDT", tf, N_CANDLES) for tf in tfs}
+        spot[c] = {tf: cached_klines(db, http, c + "USDT", tf, N_CANDLES, now) for tf in tfs}
     return spot
 
 
@@ -78,13 +79,13 @@ def load_deriv(db, http, days: int) -> dict:
     return out
 
 
-def load_deriv_bybit() -> dict:
+def load_deriv_bybit(db=None) -> dict:
     """engine input for every coin Bybit lists; raises if Bybit cannot be reached at all."""
     now = int(time.time() * 1000)
     http = Http(bybit_hist.PAUSE)
     out = {}
     for c in COINS:
-        d = bybit_hist.load_coin(http, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W)
+        d = bybit_hist.load_coin(http, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W, db)
         if d is not None:
             out[c] = d
     if not out:
@@ -105,9 +106,9 @@ def main():
         workers = int(os.getenv("BACKTEST_WORKERS", "2"))
         http = Http()
         t0 = time.time()
-        spot = load_price(http)
+        spot = load_price(http, db)
         try:
-            deriv, deriv_source = load_deriv_bybit(), "bybit"
+            deriv, deriv_source = load_deriv_bybit(db), "bybit"
         except Exception as e:  # noqa: BLE001 — e.g. Bybit blocks the IP: use the Binance archive
             print(f"[reweight] Bybit history failed ({str(e)[:200]}), using the Binance archive", flush=True)
             deriv_source = "binance" if days >= MIN_OI_DAYS else None

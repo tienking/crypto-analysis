@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from . import cache
 from .binance_hist import Http
 
 API = "https://api.bybit.com/v5/market/"
@@ -89,20 +90,24 @@ def starts(tfs, liq_period: dict, now: int, n: int, warmup: int) -> dict:
     return out
 
 
-def load_coin(http: Http, coin: str, tfs, liq_period: dict, now: int, n: int, warmup: int) -> dict | None:
+def load_coin(http: Http, coin: str, tfs, liq_period: dict, now: int, n: int, warmup: int, db=None) -> dict | None:
     """engine.deriv_rows input for one coin: {"oi": {tf: [(ts, oi, oi_usd)]}, "fut": {tf: candles},
-    "funding": [(ts, %)]}. None when Bybit does not list the coin."""
+    "funding": [(ts, %)]}. None when Bybit does not list the coin. With `db`, every series goes
+    through the download cache (only what is new since the last run is fetched)."""
     symbol = coin + "USDT"
     start = starts(tfs, liq_period, now, n, warmup)
     need = sorted(start, key=STEP.get)
-    fut = {tf: klines(http, symbol, tf, start[tf], now) for tf in need}
+    key = lambda kind, tf: f"bybit:{kind}:{symbol}:{tf}"
+    fut = {tf: cache.series(db, key("kline", tf), start[tf], now, lambda a, b, tf=tf: klines(http, symbol, tf, a, b))
+           for tf in need}
     if all(v is None for v in fut.values()):
         return None
     src_start = {}
     for tf in need:
         src = OI_FROM.get(tf, tf)
         src_start[src] = min(src_start.get(src, now), start[tf])
-    fetched = {src: open_interest(http, symbol, src, s, now) for src, s in src_start.items()}
+    fetched = {src: cache.points(cache.series(db, key("oi", src), s, now, lambda a, b, src=src: cache.from_points(
+        open_interest(http, symbol, src, a, b)))) for src, s in src_start.items()}
     raw = {tf: [(t, v) for t, v in fetched[OI_FROM.get(tf, tf)] if t % STEP[tf] == 0 and t >= start[tf]]
            for tf in need}
     oi = {}
@@ -110,4 +115,6 @@ def load_coin(http: Http, coin: str, tfs, liq_period: dict, now: int, n: int, wa
         k = fut[tf]
         px = dict(zip(k["t"].tolist(), k["c"].tolist())) if k is not None else {}
         oi[tf] = [(t, v, v * px[t]) for t, v in raw[tf] if t in px]   # USD value at that candle's close
-    return {"oi": oi, "fut": fut, "funding": funding(http, symbol, min(start.values()) - 30 * 86_400_000, now)}
+    f0 = min(start.values()) - 30 * 86_400_000
+    fr = cache.series(db, key("funding", "8h"), f0, now, lambda a, b: cache.from_points(funding(http, symbol, a, b)))
+    return {"oi": oi, "fut": fut, "funding": cache.points(fr)}

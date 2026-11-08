@@ -15,13 +15,14 @@ the weights are not locked.
 from __future__ import annotations
 
 import sys
+import time
 from datetime import datetime, timezone
 
 import numpy as np
 
 from analysis.bottoms import HORIZONS, at_low, held, sign_matrix
 
-from .binance_hist import COINS, Http, klines
+from .binance_hist import COINS, Http, cached_klines
 
 MIN_SAMPLES = 200
 
@@ -47,10 +48,11 @@ def table(series: list[dict], recent: int, span: int) -> dict:
     return out
 
 
-def measure(http: Http) -> dict:
+def measure(http: Http, db=None) -> dict:
     out = {}
+    now = int(time.time() * 1000)
     for key, cfg in HORIZONS.items():
-        series = [s for s in (klines(http, c + "USDT", cfg["tf"], 30000) for c in COINS) if s is not None]
+        series = [s for s in (cached_klines(db, http, c + "USDT", cfg["tf"], 30000, now) for c in COINS) if s is not None]
         out[key] = table(series, cfg["recent"], cfg["span"])
     return out
 
@@ -78,7 +80,7 @@ def decide(tables: dict, locked: bool) -> tuple[bool, str]:
 
 def update(db, http: Http, locked: bool = False) -> dict:
     """Measure, store the run, activate it if it passes. Returns a short summary."""
-    tables = measure(http)
+    tables = measure(http, db)
     applied, reason = decide(tables, locked)
     doc = {"created_at": datetime.now(timezone.utc), "applied": applied, "reason": reason, "active": False,
            "tables": {k: {f: t[f] for f in ("rates", "samples", "base")} for k, t in tables.items()},

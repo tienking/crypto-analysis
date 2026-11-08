@@ -5,7 +5,7 @@
 Deletes `runs`, `weight_sets` and `bottom_rates`: the app falls back to the code defaults
 until the next `python -m backtest.reweight`, which seeds them again and starts a new
 history. Keeps `market_5m` (the OI archive cannot be downloaded again: Binance keeps ~30
-days) and `state` (the lock).
+days), `cache` (raw downloads, still valid) and `state` (the lock).
 """
 from __future__ import annotations
 

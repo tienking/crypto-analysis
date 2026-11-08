@@ -140,7 +140,7 @@ Two systemd timers on the VPS run the `backtest/` package (`deploy/crypto-analys
 | Job | When | What |
 |---|---|---|
 | `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for the backtest coins (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT). Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
-| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Derivative rows come from Bybit's history (~3–4 min of downloads per coin). Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
+| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Derivative rows come from Bybit's history. Every download goes through a cache in the database (`backtest/cache.py`), so only the first run fetches the full history (about an hour with Bybit); later runs fetch only the new week. Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
 
 Guardrails of a weekly update (`backtest/fit.py`):
 1. Each (coin, timeframe) history is split in time: older half = train, newer half = test.
@@ -167,13 +167,16 @@ Guardrails of a weekly update (`backtest/fit.py`):
 
 `python -m backtest.reset --yes` deletes `runs`, `weight_sets` and `bottom_rates` (used when the
 coin set changes); the app then uses the code defaults until the next reweight run. The OI
-archive `market_5m` and the lock are kept.
+archive `market_5m`, the download `cache` and the lock are kept.
 
 Storage: MongoDB database `ca_backtest` (env `BACKTEST_DB`) on the same cluster:
 `market_5m` (one document per coin per UTC day, 288 slots per field, about 105 MB per year
 for 13 coins), `weight_sets` (every set used, one `active` per group), `runs` (every weekly
-run with its metrics), `state` (`{_id: "weights", locked}`) and `bottom_rates` (every
-bottom-rate measurement, one `active`). The web app reads the active weight sets and bottom
+run with its metrics), `state` (`{_id: "weights", locked}`), `bottom_rates` (every
+bottom-rate measurement, one `active`) and `cache` (the downloaded candles, OI and funding the
+weekly run reuses: one zlib-compressed document per series, about 110 MB for 13 coins; it
+does not grow, since each series keeps a fixed window. Safe to delete: the next run downloads
+everything again). The web app reads the active weight sets and bottom
 table once a minute and falls back to the code defaults when the database is unreachable.
 
 Binance data: spot candles from `data-api.binance.vision`, then `api.binance.com`, then
@@ -221,6 +224,7 @@ crypto-analysis/
 │   ├── store.py             # ca_backtest layout, day buckets, weight groups, rollback target
 │   ├── binance_hist.py      # Sync, throttled, paginated Binance history downloads
 │   ├── bybit_hist.py        # Bybit OI / futures candles / funding history for the derivative replay
+│   ├── cache.py             # Download cache in ca_backtest.cache: a run fetches only what is new
 │   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
 │   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)

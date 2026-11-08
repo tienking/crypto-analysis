@@ -120,11 +120,11 @@ class FakeDb:
 def test_update_activates_a_passing_table_and_keeps_a_failing_one(monkeypatch):
     db = FakeDb()
     halves = {"older": [0.2, 0.3, 0.3, 0.4], "newer": [0.2, 0.3, 0.3, 0.4]}
-    monkeypatch.setattr(bb, "measure", lambda http: {k: {**t, **halves} for k, t in good_tables().items()})
+    monkeypatch.setattr(bb, "measure", lambda http, db=None: {k: {**t, **halves} for k, t in good_tables().items()})
     r = bb.update(db, http=None)
     assert r["applied"] and [d["active"] for d in db.bottom_rates.docs] == [False, True]
     bad = good_tables(); bad["mid"]["samples"][0] = 10
-    monkeypatch.setattr(bb, "measure", lambda http: {k: {**t, **halves} for k, t in bad.items()})
+    monkeypatch.setattr(bb, "measure", lambda http, db=None: {k: {**t, **halves} for k, t in bad.items()})
     r = bb.update(db, http=None)
     assert not r["applied"] and [d["active"] for d in db.bottom_rates.docs] == [False, True, False]
     r = bb.update(db, http=None, locked=True)

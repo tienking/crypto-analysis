@@ -6,6 +6,8 @@ import time
 import httpx
 import numpy as np
 
+from . import cache
+
 SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"
 # Not here: BGB (not listed on Binance) and HYPE (Binance spot only since Sep 2026; it trades
@@ -57,6 +59,37 @@ def klines(http: Http, symbol: str, interval: str, n: int, futures: bool = False
     rows = rows[-n:]
     a = np.array([[float(r[k]) for k in range(6)] for r in rows])
     return {"t": a[:, 0].astype(np.int64), "o": a[:, 1], "h": a[:, 2], "l": a[:, 3], "c": a[:, 4], "v": a[:, 5]}
+
+
+INTERVAL_MS = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "2h": 7_200_000,
+               "4h": 14_400_000, "12h": 43_200_000, "1d": 86_400_000, "3d": 259_200_000, "1w": 604_800_000}
+
+
+def klines_range(http: Http, symbol: str, interval: str, start: int, end: int, futures: bool = False) -> dict | None:
+    """Closed candles opened in [start, end) as numpy arrays, paging forward from `start`."""
+    url = f"{FAPI}/fapi/v1/klines" if futures else f"{SPOT}/api/v3/klines"
+    page = 1500 if futures else 1000
+    step = INTERVAL_MS[interval]
+    rows, s = [], start
+    while s < end:
+        d = http.get(url, {"symbol": symbol, "interval": interval, "startTime": s, "endTime": end - 1, "limit": page})
+        if not d:
+            break
+        rows += [r for r in d if int(r[0]) + step <= end]
+        if len(d) < page:
+            break
+        s = int(d[-1][0]) + 1
+    if not rows:
+        return None
+    a = np.array([[float(r[k]) for k in range(6)] for r in rows])
+    return {"t": a[:, 0].astype(np.int64), "o": a[:, 1], "h": a[:, 2], "l": a[:, 3], "c": a[:, 4], "v": a[:, 5]}
+
+
+def cached_klines(db, http: Http, symbol: str, interval: str, n: int, now: int, futures: bool = False) -> dict | None:
+    """Closed candles of roughly the last `n` intervals, through the download cache."""
+    key = f"binance:{'fut' if futures else 'spot'}:{symbol}:{interval}"
+    return cache.series(db, key, now - n * INTERVAL_MS[interval], now,
+                        lambda a, b: klines_range(http, symbol, interval, a, b, futures))
 
 
 def futures_data(http: Http, endpoint: str, symbol: str, since: int) -> list[dict]:
