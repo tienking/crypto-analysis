@@ -86,8 +86,10 @@ def klines_range(http: Http, symbol: str, interval: str, start: int, end: int, f
 
 
 def cached_klines(db, http: Http, symbol: str, interval: str, n: int, now: int, futures: bool = False) -> dict | None:
-    """Closed candles of roughly the last `n` intervals, through the download cache."""
-    key = f"binance:{'fut' if futures else 'spot'}:{symbol}:{interval}"
+    """Closed candles of roughly the last `n` intervals, through the download cache. `n` is in the
+    key: the backtest (15000) and the bottom rates (30000) read the same 4h/1d series, and one
+    shared document would be trimmed by one and downloaded again in full by the other."""
+    key = f"binance:{'fut' if futures else 'spot'}:{symbol}:{interval}:{n}"
     return cache.series(db, key, now - n * INTERVAL_MS[interval], now,
                         lambda a, b: klines_range(http, symbol, interval, a, b, futures))
 

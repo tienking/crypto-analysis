@@ -168,6 +168,9 @@ Guardrails of a weekly update (`backtest/fit.py`):
    the measurement is stored and the active table kept. `python -m backtest.bottoms` runs this
    step alone (`--dry-run` only prints).
 
+`python -m backtest.prefetch` only fills the download cache (no backtest), e.g. before the
+first run on a new coin set; a later run then fetches only what is new.
+
 `python -m backtest.reset --yes` deletes `runs`, `weight_sets` and `bottom_rates` (used when the
 coin set changes); the app then uses the code defaults until the next reweight run. The OI
 archive `market_5m`, the download `cache` and the lock are kept.
@@ -228,6 +231,7 @@ crypto-analysis/
 │   ├── binance_hist.py      # Sync, throttled, paginated Binance history downloads
 │   ├── bybit_hist.py        # Bybit OI / futures candles / funding history for the derivative replay
 │   ├── cache.py             # Download cache in ca_backtest.cache: a run fetches only what is new
+│   ├── prefetch.py          # Manual: fill / top up the cache without running the backtest
 │   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
 │   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)
