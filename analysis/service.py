@@ -117,7 +117,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
     bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk, bottom_table)
     if tf in SHORT_TF_NO_EDGE:
         result["warnings"].append(
-            f"Khung {tf}: backtest trên 14 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "
+            f"Khung {tf}: backtest trên 13 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "
             "Xem điểm như mô tả xu hướng hiện tại, không phải dự báo.")
 
     n = min(CHART_CANDLES, len(candles))

@@ -114,7 +114,7 @@ SYSTEM_PROMPT = (
     "The liquidation zones are a model built from Binance open-interest history and an assumed "
     "leverage mix (10x-100x), not real order data: price tends to be pulled towards large, close "
     "clusters, but often reverses after sweeping them. The default weights come from a backtest "
-    "on 14 large coins: on 4h and above the criteria had a small but real edge (strongest: BTC "
+    "on 13 large coins: on 4h and above the criteria had a small but real edge (strongest: BTC "
     "context, momentum, EMA trend, volume); on 5m-30m none of them predicted the next candles, "
     "so say the score is weak evidence there. The bottom readings are measured hit rates, not "
     "predictions: of the past times a coin sat at a 7-day (4h) or 60-day (1d) low with that many "

@@ -267,7 +267,7 @@ function WeightsNote({ info }) {
   if (!info) return null;
   const text = info.source === "custom"
     ? "Đang dùng trọng số bạn tự chỉnh. Bấm “Khôi phục mặc định” bên dưới để quay lại trọng số tự động."
-    : `Trọng số tự động cho ${GROUP_TEXT[info.group]}, cập nhật hằng tuần từ backtest trên 14 coin lớn`
+    : `Trọng số tự động cho ${GROUP_TEXT[info.group]}, cập nhật hằng tuần từ backtest trên 13 coin lớn`
       + (info.updated_at ? ` · lần gần nhất ${new Date(info.updated_at + (String(info.updated_at).endsWith("Z") ? "" : "Z")).toLocaleDateString("vi-VN")}` : "")
       + ".";
   return <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px", lineHeight: 1.5 }}>{text}</p>;
@@ -439,7 +439,7 @@ function Bottoms({ b, narrow }) {
     <section style={panel} aria-label="Dấu hiệu đáy">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         <h3 style={{ fontSize: 16 }}>Dấu hiệu đáy</h3>
-        <span style={label}>RSI · MACD · Volume · đo trên 14 coin lớn từ 2017</span>
+        <span style={label}>RSI · MACD · Volume · đo trên 13 coin lớn từ 2017</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
         {b.short && <BottomHorizon h={b.short} />}

@@ -36,9 +36,9 @@ HORIZONS = {
     "short": {"tf": "4h", "recent": 6, "span": 42, "days": 7, "name": "Đáy ngắn hạn"},
     "mid": {"tf": "1d", "recent": 7, "span": 60, "days": 60, "name": "Đáy trung hạn"},
 }
-# Filled from backtest/bottoms.py (Nov 2026, 14 coins). RATES[h][k]: k = 0, 1, 2, 3+ signs; N = samples.
+# Filled from backtest/bottoms.py (Nov 2026, 13 coins). RATES[h][k]: k = 0, 1, 2, 3+ signs; N = samples.
 RATES = {"short": [0.191, 0.285, 0.305, 0.369], "mid": [0.22, 0.298, 0.338, 0.519]}
-N = {"short": [5115, 14410, 12533, 2957], "mid": [782, 1861, 1445, 339]}
+N = {"short": [5099, 14389, 12526, 2956], "mid": [782, 1861, 1445, 339]}
 BASE = {"short": 0.285, "mid": 0.314}
 
 

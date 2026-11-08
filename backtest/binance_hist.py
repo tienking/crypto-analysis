@@ -8,9 +8,9 @@ import numpy as np
 
 SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"
-# BGB is not listed on Binance (checked Nov 2026); HYPE spot only since Sep 2026, so it joins the
-# longer timeframes as its history grows (the engine skips series that are too short).
-COINS = ("BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "HYPE", "DOGE", "ADA", "LTC", "AVAX", "SUI", "TAO", "DOT")
+# Not here: BGB (not listed on Binance) and HYPE (Binance spot only since Sep 2026; it trades
+# mostly on Hyperliquid, so Binance data represents it poorly). Checked Nov 2026.
+COINS = ("BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ADA", "LTC", "AVAX", "SUI", "TAO", "DOT")
 PAUSE = 0.25  # seconds between requests: /futures/data allows 1000 requests per 5 min per IP
 
 

@@ -321,8 +321,8 @@ export default function Guide({ onClose }) {
         <section id="g-weights" style={{ scrollMarginTop: 80 }}>
           <h2 style={h2}>Trọng số đến từ đâu?</h2>
           <p style={p}>
-            Trọng số <b>không đặt theo cảm tính</b>. Trang chạy lại (backtest) chính các tiêu chí này trên lịch sử của 14 coin
-            lớn (BTC, ETH, BNB, XRP, SOL, TRX, HYPE, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT), xem tiêu chí nào thật sự đi trước giá 5 nến sau đó, rồi
+            Trọng số <b>không đặt theo cảm tính</b>. Trang chạy lại (backtest) chính các tiêu chí này trên lịch sử của 13 coin
+            lớn (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT), xem tiêu chí nào thật sự đi trước giá 5 nến sau đó, rồi
             cho tiêu chí đó trọng số cao hơn. Có <b>hai bộ trọng số</b>: một cho khung 5m–1H, một cho khung 4H–1D, vì hai nhóm
             khung hoạt động rất khác nhau.
           </p>
@@ -375,7 +375,7 @@ export default function Guide({ onClose }) {
             gần nhất là thấp nhất 60 ngày, và không bị thủng trong 60 ngày sau.
           </p>
           <p style={p}>
-            Trang đã đếm lại mọi lần như vậy trên lịch sử 14 coin lớn từ 2017, chia theo số dấu hiệu đáy có lúc đó. Con số bạn
+            Trang đã đếm lại mọi lần như vậy trên lịch sử 13 coin lớn từ 2017, chia theo số dấu hiệu đáy có lúc đó. Con số bạn
             thấy là kết quả của nhóm có cùng số dấu hiệu với hiện tại. Bảng được đo lại mỗi sáng Chủ nhật cùng lúc với trọng số,
             và chỉ thay khi đủ mẫu và thứ tự hợp lý (0 dấu hiệu thấp nhất, 3–4 dấu hiệu cao nhất):
           </p>
@@ -437,7 +437,7 @@ export default function Guide({ onClose }) {
             <li>Ngay cả ở khung 4H–1D, lợi thế của điểm số là <b>nhỏ</b>: đúng chiều nhiều hơn sai một chút, không phải công cụ chắc thắng.</li>
             <li>Ở khung 5m–30m, điểm số gần như không có sức dự báo.</li>
             <li>Vùng thanh lý là ước tính từ mô hình, không phải lệnh thật.</li>
-            <li>Tỉ lệ đáy là thống kê quá khứ trên 14 coin lớn; coin nhỏ hoặc mới niêm yết có thể hành xử khác.</li>
+            <li>Tỉ lệ đáy là thống kê quá khứ trên 13 coin lớn; coin nhỏ hoặc mới niêm yết có thể hành xử khác.</li>
             <li>Tin tức, sự kiện vĩ mô (lãi suất, CPI...) có thể đảo chiều thị trường mà không chỉ báo kỹ thuật nào báo trước.</li>
             <li>Luôn tự đặt điểm cắt lỗ và chỉ dùng số tiền bạn chấp nhận mất. Đây không phải lời khuyên đầu tư.</li>
           </ul>

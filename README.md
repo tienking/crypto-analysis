@@ -42,9 +42,9 @@ The analysis UI and the Admin page are in Vietnamese.
    | BTC context | 23 | BTC's EMA trend up on the same timeframe (dropped when analysing BTC: its weight is shared pro rata by the other 7, and the table shows those effective weights; a BTC-only fitted set did not beat this on the test half) |
    | Liquidation zones (estimated) | 5 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
 
-   **Weights come from a backtest**. Since v2.16.0 it runs on 14 coins (BTC, ETH, BNB, XRP, SOL, TRX, HYPE, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT;
-   BGB is not on Binance, HYPE spot only since Sep 2026 so it joins the longer timeframes as its
-   history grows). The code defaults and the tables below are from the first backtest (Nov 2026,
+   **Weights come from a backtest**. Since v2.16.0 it runs on 13 coins (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT;
+   not BGB, which is not on Binance, nor HYPE, whose Binance spot history starts Sep 2026 and
+   which trades mostly on Hyperliquid). The code defaults and the tables below are from the first backtest (Nov 2026,
    10 coins: BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK, AVAX; up to 15,000 candles per timeframe; the app's own criteria code replayed candle by
    candle, with the forming higher-timeframe candle rebuilt so nothing looks ahead). Target:
    the return over the next 5 candles, scaled by recent volatility. Information coefficient
@@ -139,7 +139,7 @@ Two systemd timers on the VPS run the `backtest/` package (`deploy/crypto-analys
 
 | Job | When | What |
 |---|---|---|
-| `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for the backtest coins (BTC, ETH, BNB, XRP, SOL, TRX, HYPE, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT). Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
+| `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for the backtest coins (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT). Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
 | `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
 
 Guardrails of a weekly update (`backtest/fit.py`):
@@ -164,8 +164,8 @@ coin set changes); the app then uses the code defaults until the next reweight r
 archive `market_5m` and the lock are kept.
 
 Storage: MongoDB database `ca_backtest` (env `BACKTEST_DB`) on the same cluster:
-`market_5m` (one document per coin per UTC day, 288 slots per field, about 110 MB per year
-for 14 coins), `weight_sets` (every set used, one `active` per group), `runs` (every weekly
+`market_5m` (one document per coin per UTC day, 288 slots per field, about 105 MB per year
+for 13 coins), `weight_sets` (every set used, one `active` per group), `runs` (every weekly
 run with its metrics), `state` (`{_id: "weights", locked}`) and `bottom_rates` (every
 bottom-rate measurement, one `active`). The web app reads the active weight sets and bottom
 table once a minute and falls back to the code defaults when the database is unreachable.
