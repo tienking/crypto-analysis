@@ -140,7 +140,7 @@ Two systemd timers on the VPS run the `backtest/` package (`deploy/crypto-analys
 | Job | When | What |
 |---|---|---|
 | `python -m backtest.collect` | daily 00:00 Vietnam time (17:00 UTC) | Archives Binance's 5m futures series that Binance keeps only ~30 days: open interest (contracts + USD), global long/short account ratio, top-trader position ratio, taker buy/sell volume, for the backtest coins (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT). Fetches only what is newer than the archive, so after downtime of up to ~29 days the next run fills the gap. |
-| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
+| `python -m backtest.reweight` | Sunday 07:15 Vietnam time (00:15 UTC, after the daily candle closes) | Downloads up to 15,000 candles per timeframe, replays the app's own criteria code (`backtest/engine.py`), and proposes new weights per group (`backtest/fit.py`). Derivative rows come from Bybit's history (~3–4 min of downloads per coin). Then re-measures the bottom-signal hit rates (`backtest/bottoms.py`, ~3 min of extra downloads). Runs at low CPU/IO priority with 2 workers (`BACKTEST_WORKERS`). |
 
 Guardrails of a weekly update (`backtest/fit.py`):
 1. Each (coin, timeframe) history is split in time: older half = train, newer half = test.
@@ -151,9 +151,15 @@ Guardrails of a weekly update (`backtest/fit.py`):
 4. **Apply only if** the stepped set's composite IC on the test half beats the current set's
    by at least 0.002, and weights are not locked. Otherwise the run is recorded and nothing
    changes.
-5. Derivatives and liquidation stay fixed until the archive holds **180 days** of OI; on
-   ~15 days a trial run gave liquidation an IC of +0.07, which is exactly the noise this
-   threshold keeps out.
+5. Derivatives and liquidation are replayed on **Bybit's** USDT-perpetual history
+   (`backtest/bybit_hist.py`: OI, futures candles and funding over the same span as each
+   timeframe's spot candles, from 2020), because Binance keeps 5m OI for only ~30 days. A coin
+   Bybit does not list gets no derivative rows. If Bybit cannot be reached at all, the run
+   falls back to the Binance archive once it holds **180 days** of OI (on ~15 days a trial
+   gave liquidation an IC of +0.07, exactly the noise this threshold keeps out); below that
+   the two keep their weight. The run records `deriv_source` (`bybit`, `binance` or null).
+   A study on BTC and ETH (Nov 2026) found no stable edge yet: both had a negative IC on the
+   older half and a positive one on the newer half.
 6. Bottom-signal rates: a new table is applied only if every sign-count group has ≥ 200
    lows, 0 signs has the lowest rate and 3+ the highest, and weights are not locked; otherwise
    the measurement is stored and the active table kept. `python -m backtest.bottoms` runs this
@@ -214,6 +220,7 @@ crypto-analysis/
 ├── backtest/                # Run by systemd timers, not by the web app
 │   ├── store.py             # ca_backtest layout, day buckets, weight groups, rollback target
 │   ├── binance_hist.py      # Sync, throttled, paginated Binance history downloads
+│   ├── bybit_hist.py        # Bybit OI / futures candles / funding history for the derivative replay
 │   ├── collect.py           # Daily: archive 5m OI / long-short / taker series
 │   ├── engine.py            # Replays the criteria candle by candle (no look-ahead)
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)

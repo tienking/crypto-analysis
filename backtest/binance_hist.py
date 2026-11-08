@@ -15,13 +15,14 @@ PAUSE = 0.25  # seconds between requests: /futures/data allows 1000 requests per
 
 
 class Http:
-    def __init__(self):
+    def __init__(self, pause: float = PAUSE):
+        self.pause = pause
         self.c = httpx.Client(timeout=30, headers={"User-Agent": "crypto-analysis-backtest/1.0"})
 
     def get(self, url: str, params: dict):
         last = None
         for attempt in range(5):
-            time.sleep(PAUSE)
+            time.sleep(self.pause)
             try:
                 r = self.c.get(url, params=params)
                 if r.status_code == 200:

@@ -82,7 +82,7 @@ def price_rows(coin: str, tf: str) -> list[dict]:
     return out
 
 
-def deriv_rows(coin: str, tf: str, min_oi: int = 300) -> list[dict]:
+def deriv_rows(coin: str, tf: str, min_oi: int = 300, n: int = 15000) -> list[dict]:
     d = _DATA["deriv"].get(coin)
     if not d or tf not in d["fut"] or LIQ_PERIOD[tf] not in d["fut"]:
         return []
@@ -100,7 +100,9 @@ def deriv_rows(coin: str, tf: str, min_oi: int = 300) -> list[dict]:
     fr_t = [x[0] for x in d["funding"]]
     lr = np.diff(np.log(a["c"]))
     out = []
-    for i in range(W - 1, len(a["c"]) - H):
+    # Only the last n candles, like the spot rows (the same series may be longer because it is
+    # also another timeframe's liquidation period).
+    for i in range(max(W - 1, len(a["c"]) - n), len(a["c"]) - H):
         if (int(a["t"][i]) // dt) % H:
             continue
         close_t = int(a["t"][i]) + dt

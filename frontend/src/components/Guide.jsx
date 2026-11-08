@@ -330,6 +330,11 @@ export default function Guide({ onClose }) {
             Mỗi sáng Chủ nhật hệ thống tự backtest lại. Trọng số chỉ thay đổi khi bộ mới tốt hơn bộ cũ trên phần dữ liệu nó
             chưa từng thấy, và mỗi lần mỗi tiêu chí chỉ đổi tối đa 3 điểm, để tránh chạy theo nhiễu.
           </p>
+          <p style={p}>
+            Riêng Phái sinh và Thanh lý cần lịch sử Open Interest. Binance chỉ giữ khoảng 30 ngày, nên phần backtest của hai tiêu
+            chí này dùng lịch sử OI, funding và nến futures của sàn <b>Bybit</b> (có từ 2020). Khi bạn xem phân tích, dữ liệu
+            vẫn lấy từ Binance.
+          </p>
           {sets && (
             <div style={{ overflowX: "auto", margin: "4px 0 12px" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", maxWidth: 520 }}>

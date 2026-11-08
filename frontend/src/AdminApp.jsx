@@ -195,8 +195,11 @@ function WeightsAdmin({ token, flash }) {
         <div style={{ display: "grid", gap: 3 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{d.locked ? "Đang khoá: lần chạy hằng tuần chỉ đề xuất, không áp dụng gì" : "Tự động: lần chạy hằng tuần có thể áp dụng trọng số mới"}</span>
           <span style={small}>
-            Lịch sử OI đã lưu: {d.oi_days} ngày
-            {d.oi_days < MIN_OI_DAYS ? ` · phái sinh và thanh lý được đưa vào khi đủ ${MIN_OI_DAYS} ngày` : " · phái sinh và thanh lý đã được tính"}
+            {lastRun?.deriv_source === undefined ? "Phái sinh và thanh lý: backtest trên lịch sử OI của Bybit từ lần chạy tới"
+              : lastRun.deriv_source === "bybit" ? "Phái sinh và thanh lý: backtest trên lịch sử OI của Bybit"
+              : lastRun?.deriv_source === "binance" ? "Phái sinh và thanh lý: backtest trên kho OI Binance (Bybit lỗi)"
+              : `Phái sinh và thanh lý chưa được backtest (Bybit lỗi, kho OI Binance cần đủ ${MIN_OI_DAYS} ngày)`}
+            {` · kho OI Binance: ${d.oi_days} ngày`}
             {lastRun ? ` · lần chạy gần nhất ${fmtDate(lastRun.started_at)} (${STATUS[lastRun.status] || lastRun.status})` : " · chưa chạy lần nào"}
           </span>
         </div>

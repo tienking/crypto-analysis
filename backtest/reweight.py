@@ -3,9 +3,10 @@
     python -m backtest.reweight            # BACKTEST_WORKERS=2 by default
 
 Two weight groups, because the backtest behaves very differently by timeframe:
-short = 5m/15m/30m/1h, long = 4h/12h/1d. Derivatives and liquidation keep their weight
-until the archive (backtest.collect) holds MIN_OI_DAYS of OI history; then they are fitted
-like the others. Every run is stored in `runs`, every applied change in `weight_sets`.
+short = 5m/15m/30m/1h, long = 4h/12h/1d. Derivatives and liquidation are replayed on Bybit's
+history (bybit_hist: OI, futures candles and funding since 2020) and fitted like the
+others. If Bybit fails, the run falls back to the Binance archive (backtest.collect), used
+once it holds MIN_OI_DAYS of OI; below that they keep their weight. Every run is stored in `runs`, every applied change in `weight_sets`.
 The same run re-measures the bottom-signal hit rates (backtest.bottoms -> `bottom_rates`).
 """
 from __future__ import annotations
@@ -14,9 +15,9 @@ import os
 import time
 from datetime import datetime, timezone
 
-from analysis.config import HIGHER_TF, Weights
+from analysis.config import HIGHER_TF, LIQ_PERIOD, Weights
 
-from . import engine
+from . import bybit_hist, engine
 from .bottoms import update as update_bottoms
 from .binance_hist import COINS, Http, funding, klines
 from .fit import propose
@@ -77,6 +78,20 @@ def load_deriv(db, http, days: int) -> dict:
     return out
 
 
+def load_deriv_bybit() -> dict:
+    """engine input for every coin Bybit lists; raises if Bybit cannot be reached at all."""
+    now = int(time.time() * 1000)
+    http = Http(bybit_hist.PAUSE)
+    out = {}
+    for c in COINS:
+        d = bybit_hist.load_coin(http, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W)
+        if d is not None:
+            out[c] = d
+    if not out:
+        raise RuntimeError("Bybit returned no data")
+    return out
+
+
 def main():
     db = sync_db()
     started = now()
@@ -87,12 +102,18 @@ def main():
         locked = bool(state.get("locked"))
         current = ensure_baseline(db)
         days = oi_days(db)
-        use_deriv = days >= MIN_OI_DAYS
-        span = min(days, 365)                    # bounds the derivative replay time
         workers = int(os.getenv("BACKTEST_WORKERS", "2"))
         http = Http()
         t0 = time.time()
-        data = {"spot": load_price(http), "deriv": load_deriv(db, http, span) if use_deriv else {}}
+        spot = load_price(http)
+        try:
+            deriv, deriv_source = load_deriv_bybit(), "bybit"
+        except Exception as e:  # noqa: BLE001 — e.g. Bybit blocks the IP: use the Binance archive
+            print(f"[reweight] Bybit history failed ({str(e)[:200]}), using the Binance archive", flush=True)
+            deriv_source = "binance" if days >= MIN_OI_DAYS else None
+            deriv = load_deriv(db, http, min(days, 365)) if deriv_source else {}
+        use_deriv = bool(deriv)
+        data = {"spot": spot, "deriv": deriv}
         t_dl = time.time() - t0
         jobs = [("price", c, tf) for c in COINS for tf in TFS]
         rows = engine.run(data, jobs, workers)
@@ -121,8 +142,9 @@ def main():
             bottoms = {"applied": False, "reason": f"error: {str(e)[:300]}"}
         db.runs.update_one({"_id": run_id}, {"$set": {
             "status": "done", "finished_at": now(), "locked": locked, "oi_days": days, "deriv_included": use_deriv,
+            "deriv_source": deriv_source,
             "rows": len(rows), "download_s": round(t_dl), "groups": groups, "bottoms": bottoms}})
-        print(f"[reweight] {len(rows)} rows, oi_days={days}, "
+        print(f"[reweight] {len(rows)} rows, oi_days={days}, deriv={deriv_source}, "
               + ", ".join(f"{g}: {'applied' if r['applied'] else 'kept'} ({r['reason']})" for g, r in groups.items())
               + f", bottom rates: {'applied' if bottoms['applied'] else 'kept'} ({bottoms['reason']})",
               flush=True)
