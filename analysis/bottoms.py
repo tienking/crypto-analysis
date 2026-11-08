@@ -1,4 +1,4 @@
-"""Bottom signals: how often a low like the current one held, measured on 10 large coins.
+"""Bottom signals: how often a low like the current one held, measured on the backtest coins.
 
 Two horizons, independent of the timeframe on screen:
 - short: 4h candles. "At a 7-day low" = the lowest low of the last day (6 candles) is also
@@ -12,8 +12,8 @@ low, confirmed in the last 15 candles); MACD line below zero with the histogram 
 candles; a capitulation candle (red, volume ≥ 2× the 20-candle average) in the last 5.
 
 RATES[horizon][k] = share of past 7-day / 60-day lows with k signs (3 = 3 or more) that
-held, from backtest/bottoms.py (spot history since 2017 of BTC, ETH, SOL, XRP, LTC, BNB,
-DOGE, ADA, LINK, AVAX). The weekly backtest re-measures them into the `bottom_rates`
+held, from backtest/bottoms.py (full spot history of the coins in backtest.binance_hist.COINS).
+The weekly backtest re-measures them into the `bottom_rates`
 collection; the constants below are the fallback when the database has no active table.
 
 The cycle checklist (weekly candles) is not a probability: Binance history holds only two
@@ -36,10 +36,10 @@ HORIZONS = {
     "short": {"tf": "4h", "recent": 6, "span": 42, "days": 7, "name": "Đáy ngắn hạn"},
     "mid": {"tf": "1d", "recent": 7, "span": 60, "days": 60, "name": "Đáy trung hạn"},
 }
-# Filled from backtest/bottoms.py (Nov 2026). RATES[h][k]: k = 0, 1, 2, 3+ signs; N = samples.
-RATES = {"short": [0.192, 0.29, 0.307, 0.377], "mid": [0.246, 0.31, 0.36, 0.497]}
-N = {"short": [4227, 12217, 10683, 2512], "mid": [639, 1520, 1256, 290]}
-BASE = {"short": 0.29, "mid": 0.33}
+# Filled from backtest/bottoms.py (Nov 2026, 14 coins). RATES[h][k]: k = 0, 1, 2, 3+ signs; N = samples.
+RATES = {"short": [0.191, 0.285, 0.305, 0.369], "mid": [0.22, 0.298, 0.338, 0.519]}
+N = {"short": [5115, 14410, 12533, 2957], "mid": [782, 1861, 1445, 339]}
+BASE = {"short": 0.285, "mid": 0.314}
 
 
 def default_table() -> dict:

@@ -154,3 +154,18 @@ def test_run_history_points_follow_the_weights_in_effect():
     assert "short" not in h[0] and h[0]["long"] == {"ic": 0.06, "applied": False, "before": 0.06}
     assert h[1]["short"] == {"ic": 0.02, "applied": True, "before": 0.01}   # applied -> the proposal's IC
     assert h[1]["long"]["ic"] == 0.07                                        # kept -> the current set's IC
+
+
+def test_reset_clears_results_but_keeps_the_archive():
+    from backtest.reset import reset
+
+    class Col:
+        def __init__(self, n): self.n = n
+        def delete_many(self, q):
+            assert q == {}
+            n, self.n = self.n, 0
+            return type("R", (), {"deleted_count": n})()
+
+    db = {"runs": Col(3), "weight_sets": Col(4), "bottom_rates": Col(2), "market_5m": Col(900), "state": Col(1)}
+    assert reset(db) == {"runs": 3, "weight_sets": 4, "bottom_rates": 2}
+    assert db["market_5m"].n == 900 and db["state"].n == 1

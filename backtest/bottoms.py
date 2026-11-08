@@ -5,7 +5,7 @@
 
 Also run every week by backtest.reweight. For every closed candle where price sits at a
 7-day (4h) / 60-day (1d) low, count the bottom signs and check whether that low held for the
-next 7 / 60 days, on the full spot history of the 10 backtest coins (~3 min of downloads).
+next 7 / 60 days, on the full spot history of the backtest coins (~3 min of downloads).
 
 Every run is stored in `bottom_rates`; the app reads the one with `active: true` (code
 defaults in analysis/bottoms.py when there is none). A new table becomes active only if each
