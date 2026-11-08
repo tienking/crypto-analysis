@@ -25,6 +25,7 @@ def main():
     db = sync_db()
     http, bybit = Http(), Http(bybit_hist.PAUSE)
     t0 = time.time()
+    failed = []
     tfs = sorted(set(TFS) | {HIGHER_TF[t] for t in TFS}, key=lambda t: TF_MS.get(t, 10**12))
     for c in COINS:
         t = time.time()
@@ -33,10 +34,16 @@ def main():
             cached_klines(db, http, c + "USDT", tf, N_CANDLES, now)
         for cfg in HORIZONS.values():
             cached_klines(db, http, c + "USDT", cfg["tf"], BOTTOM_CANDLES, now)
-        d = bybit_hist.load_coin(bybit, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W, db)
-        print(f"[prefetch] {c}: {time.time() - t:.0f}s{'' if d else ' (not on Bybit)'}", flush=True)
+        try:
+            d = bybit_hist.load_coin(bybit, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W, db)
+            note = "" if d else " (not on Bybit)"
+        except Exception as e:  # noqa: BLE001 — the other coins are still worth caching
+            failed.append(c)
+            note = f" Bybit FAILED: {str(e)[:200]}"
+        print(f"[prefetch] {c}: {time.time() - t:.0f}s{note}", flush=True)
     n = db["cache"].count_documents({})
-    print(f"[prefetch] done in {time.time() - t0:.0f}s, {n} cached series", flush=True)
+    print(f"[prefetch] done in {time.time() - t0:.0f}s, {n} cached series"
+          + (f"; run again for {', '.join(failed)} (what is cached is kept)" if failed else ""), flush=True)
 
 
 if __name__ == "__main__":

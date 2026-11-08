@@ -55,7 +55,7 @@ def test_unknown_symbol_gives_none():
 def test_other_errors_raise():
     class Down:
         def get(self, url, p):
-            return {"retCode": 10006, "retMsg": "Too many visits"}
+            return {"retCode": 10003, "retMsg": "Invalid api key"}
     with pytest.raises(RuntimeError):
         bh.klines(Down(), "BTCUSDT", "1h", 0, H1)
 
@@ -79,3 +79,26 @@ def test_load_coin_shapes_engine_input():
     close = dict(zip(d["fut"]["4h"]["t"].tolist(), d["fut"]["4h"]["c"].tolist()))[ts]
     assert oi == 5.0 and usd == pytest.approx(5.0 * close)
     assert d["funding"] and d["funding"][0][1] == pytest.approx(0.01)
+
+
+def test_transient_errors_are_retried(monkeypatch):
+    monkeypatch.setattr(bh.time, "sleep", lambda s: None)
+    t0 = 1_700_000_000_000 // H1 * H1
+    real = FakeBybit(t0, t0 + 10 * H1)
+    answers = [{"retCode": 10016, "retMsg": "svc error: Get kline failed"}, {"retCode": 10006, "retMsg": "Too many visits"}]
+
+    class Flaky:
+        def get(self, url, p):
+            return answers.pop(0) if answers else real.get(url, p)
+    k = bh.klines(Flaky(), "BTCUSDT", "1h", t0, t0 + 10 * H1)
+    assert len(k["t"]) == 10 and not answers
+
+
+def test_a_persistent_transient_error_still_raises(monkeypatch):
+    monkeypatch.setattr(bh.time, "sleep", lambda s: None)
+
+    class Down:
+        def get(self, url, p):
+            return {"retCode": 10016, "retMsg": "svc error"}
+    with pytest.raises(RuntimeError):
+        bh.klines(Down(), "BTCUSDT", "1h", 0, H1)

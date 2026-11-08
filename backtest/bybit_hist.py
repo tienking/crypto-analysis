@@ -8,6 +8,8 @@ The live app still reads Binance.
 """
 from __future__ import annotations
 
+import time
+
 import numpy as np
 
 from . import cache
@@ -24,16 +26,26 @@ OI_FROM = {"2h": "1h", "12h": "4h"}      # no 2h / 12h OI interval: keep every 2
 FUNDING_PAGE = 200 * 8 * 3_600_000      # 200 settlements of 8 h
 
 
+RETRY_CODES = {10000, 10002, 10006, 10016}   # server timeout, clock skew, rate limit, server error
+RETRIES = 6
+
+
 def _get(http: Http, endpoint: str, params: dict) -> list:
-    """`result.list` of a Bybit v5 call; [] for an unknown symbol, raises on other errors."""
-    d = http.get(API + endpoint, params)
-    if d is None:
-        return []
-    if d.get("retCode") != 0:
-        if d.get("retCode") == 10001:          # params error, e.g. symbol not listed
+    """`result.list` of a Bybit v5 call; [] for an unknown symbol. Transient errors (Bybit answers
+    them with HTTP 200 and a retCode) are retried with a growing pause; others raise."""
+    for attempt in range(RETRIES):
+        d = http.get(API + endpoint, params)
+        if d is None:
             return []
-        raise RuntimeError(f"Bybit {endpoint}: {d.get('retCode')} {d.get('retMsg')}")
-    return d["result"]["list"]
+        code = d.get("retCode")
+        if code == 0:
+            return d["result"]["list"]
+        if code == 10001:                      # params error, e.g. symbol not listed
+            return []
+        if code not in RETRY_CODES or attempt == RETRIES - 1:
+            raise RuntimeError(f"Bybit {endpoint}: {code} {d.get('retMsg')}")
+        time.sleep(min(30, 2 * 2 ** attempt))
+    return []
 
 
 def klines(http: Http, symbol: str, tf: str, start: int, end: int) -> dict | None:
