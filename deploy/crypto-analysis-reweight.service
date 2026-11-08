@@ -12,4 +12,5 @@ ExecStart=/root/projects/crypto-analysis/crypto-analysis-venv/bin/python -m back
 Nice=19
 CPUWeight=20
 IOSchedulingClass=idle
-TimeoutStartSec=3h
+# 6h: the first run on a new coin set downloads everything and replays derivatives on Bybit history.
+TimeoutStartSec=6h
