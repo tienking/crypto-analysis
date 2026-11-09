@@ -61,6 +61,7 @@ def klines(http: Http, symbol: str, interval: str, n: int, futures: bool = False
     return {"t": a[:, 0].astype(np.int64), "o": a[:, 1], "h": a[:, 2], "l": a[:, 3], "c": a[:, 4], "v": a[:, 5]}
 
 
+BINANCE_START = 1_499_990_400_000   # 2017-07-14: no Binance candle is older
 INTERVAL_MS = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "2h": 7_200_000,
                "4h": 14_400_000, "12h": 43_200_000, "1d": 86_400_000, "3d": 259_200_000, "1w": 604_800_000}
 
@@ -90,7 +91,9 @@ def cached_klines(db, http: Http, symbol: str, interval: str, n: int, now: int, 
     key: the backtest (15000) and the bottom rates (30000) read the same 4h/1d series, and one
     shared document would be trimmed by one and downloaded again in full by the other."""
     key = f"binance:{'fut' if futures else 'spot'}:{symbol}:{interval}:{n}"
-    return cache.series(db, key, now - n * INTERVAL_MS[interval], now,
+    # n long candles can reach before 1970 (15000 weeks): a negative startTime gets HTTP 400.
+    start = max(BINANCE_START, now - n * INTERVAL_MS[interval])
+    return cache.series(db, key, start, now,
                         lambda a, b: klines_range(http, symbol, interval, a, b, futures))
 
 

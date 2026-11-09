@@ -73,3 +73,13 @@ def test_without_db_or_with_a_broken_db_it_just_downloads():
 def test_points_round_trip():
     s = cache.from_points([(1, 0.5), (2, 0.25)])
     assert cache.points(s) == [(1, 0.5), (2, 0.25)] and cache.from_points([]) is None
+
+
+def test_cached_klines_never_asks_binance_for_a_negative_start(monkeypatch):
+    from backtest import binance_hist as bh
+    seen = []
+    monkeypatch.setattr(bh, "klines_range", lambda http, sym, tf, a, b, futures=False: seen.append(a) or None)
+    now = 1_790_000_000_000
+    for tf in ("1d", "3d", "1w"):
+        bh.cached_klines(None, None, "BTCUSDT", tf, 30000, now)
+    assert seen and min(seen) == bh.BINANCE_START
