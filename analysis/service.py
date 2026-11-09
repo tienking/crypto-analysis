@@ -69,7 +69,9 @@ def _clean(arr) -> list:
 
 
 async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
-                  thresholds: Thresholds, weights: Weights, bottom_table: dict | None = None) -> dict:
+                  thresholds: Thresholds, weights: Weights, bottom_table: dict | None = None,
+                  with_bottoms: bool = True) -> dict:
+    """with_bottoms=False skips the bottom signals (3 fewer requests; "bottoms" is None)."""
     symbol = normalize_symbol(raw_symbol)
     is_btc = symbol == BTC_SYMBOL
     limit = min(1000, max(300, thresholds.ema_slow + 150))
@@ -92,8 +94,8 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
     fk_task = client.futures_klines(symbol, LIQ_PERIOD[tf])
     # Bottom signals use fixed timeframes (4h, 1d, 1w) whatever the one on screen; the same
     # limit as above lets the cache serve the 4h/1d requests when they are already fetched.
-    bt_tasks = [safe(client.klines(symbol, HORIZONS[k]["tf"], limit)) for k in HORIZONS]
-    wk_task = safe(client.klines(symbol, "1w", 1000))
+    bt_tasks = [safe(client.klines(symbol, HORIZONS[k]["tf"], limit)) for k in HORIZONS] if with_bottoms else []
+    wk_task = safe(client.klines(symbol, "1w", 1000)) if with_bottoms else asyncio.sleep(0, None)
     htf, btc, funding, oi, oi_hist, fk, *bt, wk = await asyncio.gather(
         htf_task, btc_task, fund_task, oi_task, oih_task, fk_task, *bt_tasks, wk_task)
 
@@ -114,7 +116,7 @@ async def analyze(client: BinanceClient, raw_symbol: str, tf: str,
         is_btc=is_btc, funding=funding, oi_change=oi, liq=liq,
     )
     result = score(ctx, weights)
-    bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk, bottom_table)
+    bottoms = _bottoms(dict(zip(HORIZONS, bt)), wk, bottom_table) if with_bottoms else None
     if tf in SHORT_TF_NO_EDGE:
         result["warnings"].append(
             f"Khung {tf}: backtest trên 13 coin lớn cho thấy các tiêu chí không dự báo được giá vài nến tới. "

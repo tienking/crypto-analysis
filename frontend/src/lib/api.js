@@ -42,6 +42,13 @@ export async function chat(message, history, analysis) {
   return res.json(); // { reply, provider }
 }
 
+/** Score history of a coin: { t: [ms], series: { tf: [score|null] }, step, recorded }. */
+export async function fetchScores(symbol, range) {
+  const res = await fetch(`${BASE}/scores?symbol=${encodeURIComponent(symbol)}&range=${range}`);
+  if (!res.ok) throw new Error("Không tải được lịch sử điểm");
+  return res.json();
+}
+
 export async function fetchCoins() {
   const res = await fetch(`${BASE}/coins`);
   if (!res.ok) return [];

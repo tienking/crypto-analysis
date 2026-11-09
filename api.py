@@ -5,7 +5,8 @@ import asyncio
 import time
 from database import (get_coins, set_coins, get_admin, set_admin_password,
                       get_ai_settings, set_ai_settings, get_active_weights, get_bottom_rates, get_weights_admin,
-                      set_weights_locked, rollback_weights)
+                      set_weights_locked, rollback_weights, score_col)
+import score_history
 from ai import ai_chat
 from auth import create_token, verify_admin, check_password, hash_password
 from analysis.bottoms import HORIZONS
@@ -297,6 +298,27 @@ async def admin_rollback_weights(data: WeightsRollback, _: str = Depends(verify_
         raise HTTPException(400, "Không có bộ trọng số trước đó để khôi phục")
     await get_active_weights(force=True)
     return {"ok": True}
+
+
+# ── Public: score history (recorded every minute for the Admin chart pairs) ────
+
+_history_cache: dict = {}     # (symbol, range) -> (time, data)
+
+@router.get("/api/crypto-analysis/scores")
+async def scores(symbol: str, range: Literal["6h", "24h", "7d", "30d", "90d"] = "24h"):
+    try:
+        sym = score_history.normalize_symbol(symbol)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    hit = _history_cache.get((sym, range))
+    if hit and time.time() - hit[0] < 30:
+        return hit[1]
+    recorded = sym in score_history.symbols_of(await get_coins())
+    data = {**await score_history.history(score_col, sym, range), "recorded": recorded}
+    if len(_history_cache) > 200:
+        _history_cache.clear()
+    _history_cache[(sym, range)] = (time.time(), data)
+    return data
 
 
 # ── Admin: run the weekly backtest now ───────────────────────────────────────

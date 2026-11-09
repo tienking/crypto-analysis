@@ -4,6 +4,7 @@ from config import MONGODB_URL, ADMIN_USERNAME, ADMIN_PASSWORD, AI_PROVIDER, DEE
 client = AsyncIOMotorClient(MONGODB_URL)
 db = client["cryptonews"]
 settings_col = db["settings"]
+score_col = db["score_history"]          # see score_history.py
 # The old `articles` collection (RSS news, removed) is left alone: its TTL index on
 # `published` empties it within ARTICLE_TTL_DAYS (30) of the last fetch.
 

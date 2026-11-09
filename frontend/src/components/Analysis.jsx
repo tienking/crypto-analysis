@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { analyzeCoin, fetchAnalysisConfig, fetchCoins } from "../lib/api";
+import ScoreHistory from "./ScoreHistory";
 
 // Coin trend score: 8 weighted criteria on Binance data, −100..+100 (ported from coin-analysis).
 // UI text is Vietnamese. API data is only ever rendered as text, never as HTML.
@@ -215,6 +216,8 @@ export default function Analysis({ request, onAnalyzed }) {
       {error && <div role="alert" style={{ background: "var(--down-soft)", color: "var(--down)", borderRadius: 10, padding: "10px 14px", fontWeight: 600, fontSize: 14 }}>{error}</div>}
 
       {data && <Verdict d={data} narrow={narrow} />}
+
+      {data && <ScoreHistory symbol={data.symbol} tf={data.timeframe} />}
 
       {data && (
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "minmax(0,1.6fr) minmax(0,1fr)", gap: 16 }}>

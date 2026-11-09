@@ -114,6 +114,16 @@ The analysis UI and the Admin page are in Vietnamese.
    histogram rising. BTC met 4/5 around the Dec 2018 bottom and through Jun–Dec 2022; for
    altcoins the drawdown condition stays true for years, so it fires early. All of it is
    optional data: a failure leaves that part `null`.
+
+   **Score history** (`score_history.py`, card "Lịch sử điểm" under the verdict): every
+   minute, a task inside the web app scores each Admin chart pair on all 7 timeframes (default
+   thresholds, active backtest weights, bottom signals skipped; ~4 s for 6 coins) and stores
+   it in `score_history` (db `cryptonews`), one document per coin per UTC day
+   (`s.<tf>.<minute of day>`), kept 90 days. The card draws one line per timeframe (the one on
+   screen thicker), legend buttons hide/show lines, ranges 6 h / 24 h / 7 d / 30 d / 90 d
+   (bucket means, ~300–360 points per line), hover or arrow keys for the values; it refreshes
+   every minute. A coin not in the chart pairs shows a note instead. The recorder assumes one
+   uvicorn worker; `SCORE_RECORDER=0` turns it off.
 3. **Settings** — visitors can change every threshold and weight; they are kept in their
    browser (`localStorage`: `ca-thresholds`, `ca-weights-v2`, `ca-last`) and sent with each
    request. Without custom weights the request sends none and the server uses the active
@@ -225,6 +235,7 @@ crypto-analysis/
 ├── deepseek.py / gemini.py  # Chat clients
 ├── auth.py                  # Admin JWT + bcrypt
 ├── database.py              # Motor: settings (coins / AI / admin), seed defaults; active weights (60 s cache), lock, rollback
+├── score_history.py         # Per-minute score recorder (started in main.py) + history aggregation
 ├── config.py                # Env loader (Mongo, AI keys, JWT_SECRET, ADMIN_*)
 ├── backtest/                # Run by systemd timers, not by the web app
 │   ├── store.py             # ca_backtest layout, day buckets, weight groups, rollback target
@@ -258,6 +269,7 @@ crypto-analysis/
         │   ├── MarketChart.jsx  # TradingView chart; picking a pair analyses it
         │   ├── Analysis.jsx     # Controls, verdict + gauge, candle chart, indicators, liquidation map, criteria, settings
         │   ├── RunsChart.jsx    # Admin: test IC per backtest run (SVG line chart, tooltip, hidden table)
+        │   ├── ScoreHistory.jsx # Score per timeframe over time (7 toggleable lines, ranges, tooltip)
         │   ├── Guide.jsx        # "Hướng dẫn" full-screen guide to the criteria (numbers from /analysis/config)
         │   ├── GuideFigures.jsx # One illustrated example per criterion (SVG at measured width)
         │   ├── guideData.js     # Example series + JS ports of EMA/RSI/MACD and the criteria rules
@@ -275,6 +287,7 @@ crypto-analysis/
 | GET | `/api/crypto-analysis/analysis/config` | Default thresholds and weights, active `weight_sets` per group, `weight_groups`, Vietnamese labels, `bottoms` (horizons, active measured rates, samples, base rates, `updated_at`, `source`) |
 | POST | `/api/crypto-analysis/analysis` | `{symbol, timeframe, thresholds?, weights?}` (no `weights` = the active backtest set of the timeframe's group; `weights_info` says which) → score, verdict, criteria, indicators, 120 candles + EMAs, `liquidation` (bins, biggest cluster per side, pull share; null without futures), `bottoms` (`short`, `mid`: at a low?, signs, measured rate; `cycle`: weekly checklist). 404 unknown pair, 502 Binance down, 422 bad input or too few candles, 429 over 30 requests/min per IP |
 | GET | `/api/crypto-analysis/coins` | Chart coin pairs (public) |
+| GET | `/api/crypto-analysis/scores?symbol=BTC&range=24h` | Score history: `{t, series: {tf: [score|null]}, step, recorded}`; range `6h`/`24h`/`7d`/`30d`/`90d` (30 s cache) |
 | POST | `/api/crypto-analysis/chat` | `{message, history, analysis?}` → `{reply, provider}`; `analysis` is rerun on the server as context |
 | POST | `/api/crypto-analysis/admin/login` | Admin login → JWT (5 failed attempts per IP → 429, locked 5 min) |
 | GET/PUT | `/api/crypto-analysis/admin/coins` | Read / save chart coin pairs |
