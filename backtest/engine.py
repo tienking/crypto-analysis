@@ -131,13 +131,22 @@ def _call(job):
     return (price_rows if fn == "price" else deriv_rows)(coin, tf)
 
 
-def run(data: dict, jobs: list[tuple[str, str, str]], workers: int = 1) -> list[dict]:
-    """jobs = [("price"|"deriv", coin, tf)]. Workers fork and inherit `data` (Linux)."""
+def run(data: dict, jobs: list[tuple[str, str, str]], workers: int = 1, progress=None) -> list[dict]:
+    """jobs = [("price"|"deriv", coin, tf)]. Workers fork and inherit `data` (Linux).
+    `progress(done, total)` is called after each job (in order)."""
     _DATA.clear()
     _DATA.update(data)
+    parts = []
+
+    def collect(it):
+        for part in it:
+            parts.append(part)
+            if progress:
+                progress(len(parts), len(jobs))
+
     if workers > 1 and "fork" in mp.get_all_start_methods():
         with mp.get_context("fork").Pool(workers) as p:
-            parts = p.map(_call, jobs, chunksize=1)
+            collect(p.imap(_call, jobs, chunksize=1))
     else:
-        parts = [_call(j) for j in jobs]
+        collect(_call(j) for j in jobs)
     return [r for part in parts for r in part]

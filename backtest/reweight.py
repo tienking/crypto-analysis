@@ -8,10 +8,15 @@ history (bybit_hist: OI, futures candles and funding since 2020) and fitted like
 others. If Bybit fails, the run falls back to the Binance archive (backtest.collect), used
 once it holds MIN_OI_DAYS of OI; below that they keep their weight. Every run is stored in `runs`, every applied change in `weight_sets`.
 The same run re-measures the bottom-signal hit rates (backtest.bottoms -> `bottom_rates`).
+
+Progress goes to stdout (journalctl) with the elapsed time. A run stopped by SIGTERM (systemd's
+TimeoutStartSec, a restart) is marked "error" in `runs`; a run killed harder (SIGKILL, power
+loss) stays "running" until the next run starts and closes it.
 """
 from __future__ import annotations
 
 import os
+import signal
 import time
 from datetime import datetime, timezone
 
@@ -32,8 +37,45 @@ TF_MS = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "2h":
          "4h": 14_400_000, "12h": 43_200_000, "1d": DAY_MS}
 
 
+_T0 = time.time()
+
+
 def now():
     return datetime.now(timezone.utc)
+
+
+def log(msg: str):
+    """One progress line with the elapsed time, e.g. "[reweight +1h05m] ..."."""
+    m = int(time.time() - _T0) // 60
+    print(f"[reweight +{m // 60}h{m % 60:02d}m] {msg}", flush=True)
+
+
+def every_tenth(label: str):
+    """engine.run progress callback: one line per 10% of the jobs."""
+    def cb(done, total):
+        if done == total or done * 10 // total != (done - 1) * 10 // total:
+            log(f"{label} {done}/{total}")
+    return cb
+
+
+class Stopped(BaseException):
+    """BaseException: the `except Exception` fallbacks (Bybit, bottoms) must not swallow it."""
+
+
+def on_sigterm(main_pid: int):
+    """SIGTERM -> Stopped in the main process (so the run is recorded as an error); pool
+    workers forked from it, which get the same signal, just exit."""
+    def handler(signum, frame):
+        if os.getpid() != main_pid:
+            os._exit(1)
+        raise Stopped("stopped by SIGTERM (systemd timeout or restart)")
+    return handler
+
+
+def close_stale(db) -> int:
+    """Runs left "running" by a process that died: one run at a time, so any is stale."""
+    return db.runs.update_many({"status": "running"}, {"$set": {
+        "status": "error", "finished_at": now(), "error": "interrupted (process stopped before it finished)"}}).modified_count
 
 
 def ensure_baseline(db) -> dict:
@@ -58,8 +100,9 @@ def load_price(http, db=None) -> dict:
     spot = {}
     now = int(time.time() * 1000)
     tfs = sorted(set(TFS) | {HIGHER_TF[t] for t in TFS}, key=lambda t: TF_MS.get(t, 10**12))
-    for c in COINS:
+    for i, c in enumerate(COINS, 1):
         spot[c] = {tf: cached_klines(db, http, c + "USDT", tf, N_CANDLES, now) for tf in tfs}
+        log(f"price candles {i}/{len(COINS)} ({c})")
     return spot
 
 
@@ -84,17 +127,22 @@ def load_deriv_bybit(db=None) -> dict:
     now = int(time.time() * 1000)
     http = Http(bybit_hist.PAUSE)
     out = {}
-    for c in COINS:
+    for i, c in enumerate(COINS, 1):
         d = bybit_hist.load_coin(http, c, TFS, LIQ_PERIOD, now, N_CANDLES, engine.W, db)
         if d is not None:
             out[c] = d
+        log(f"Bybit derivatives {i}/{len(COINS)} ({c}{'' if d is not None else ': not listed'})")
     if not out:
         raise RuntimeError("Bybit returned no data")
     return out
 
 
 def main():
+    signal.signal(signal.SIGTERM, on_sigterm(os.getpid()))
     db = sync_db()
+    stale = close_stale(db)
+    if stale:
+        log(f"closed {stale} run(s) left 'running' by a stopped process")
     started = now()
     run = {"started_at": started, "status": "running"}
     run_id = db.runs.insert_one(run).inserted_id
@@ -104,22 +152,25 @@ def main():
         current = ensure_baseline(db)
         days = oi_days(db)
         workers = int(os.getenv("BACKTEST_WORKERS", "2"))
+        log(f"start: {len(COINS)} coins, {len(TFS)} timeframes, {workers} worker(s), oi_days={days}")
         http = Http()
         t0 = time.time()
         spot = load_price(http, db)
         try:
             deriv, deriv_source = load_deriv_bybit(db), "bybit"
         except Exception as e:  # noqa: BLE001 — e.g. Bybit blocks the IP: use the Binance archive
-            print(f"[reweight] Bybit history failed ({str(e)[:200]}), using the Binance archive", flush=True)
+            log(f"Bybit history failed ({str(e)[:200]}), using the Binance archive")
             deriv_source = "binance" if days >= MIN_OI_DAYS else None
             deriv = load_deriv(db, http, min(days, 365)) if deriv_source else {}
         use_deriv = bool(deriv)
         data = {"spot": spot, "deriv": deriv}
         t_dl = time.time() - t0
         jobs = [("price", c, tf) for c in COINS for tf in TFS]
-        rows = engine.run(data, jobs, workers)
+        log(f"downloads done ({round(t_dl / 60)} min), deriv={deriv_source}")
+        rows = engine.run(data, jobs, workers, every_tenth("price criteria"))
         if use_deriv:
-            d_rows = engine.run(data, [("deriv", c, tf) for c in COINS for tf in TFS], workers)
+            d_rows = engine.run(data, [("deriv", c, tf) for c in COINS for tf in TFS], workers,
+                                every_tenth("derivative criteria"))
             by_key = {(r["coin"], r["tf"], r["t"]): r for r in d_rows}
             for r in rows:
                 d = by_key.get((r["coin"], r["tf"], r["t"]))
@@ -129,6 +180,7 @@ def main():
             for r in rows:
                 r["derivatives"] = r["liquidation"] = None
         fit_ids = PRICE_IDS + (DERIV_IDS if use_deriv else [])
+        log("fitting weights")
         groups = {}
         for g, tfs in GROUPS.items():
             res = propose(rows, current[g], fit_ids, tfs, locked=locked)
@@ -137,6 +189,7 @@ def main():
                 db.weight_sets.update_many({"group": g, "active": True}, {"$set": {"active": False}})
                 db.weight_sets.insert_one({"group": g, "weights": res["weights"], "created_at": now(),
                                            "source": "backtest", "active": True, "run_id": run_id})
+        log("bottom-signal hit rates")
         try:
             bottoms = update_bottoms(db, http, locked)
         except Exception as e:  # noqa: BLE001 — a failure here must not lose the weights run
@@ -145,12 +198,12 @@ def main():
             "status": "done", "finished_at": now(), "locked": locked, "oi_days": days, "deriv_included": use_deriv,
             "deriv_source": deriv_source,
             "rows": len(rows), "download_s": round(t_dl), "groups": groups, "bottoms": bottoms}})
-        print(f"[reweight] {len(rows)} rows, oi_days={days}, deriv={deriv_source}, "
-              + ", ".join(f"{g}: {'applied' if r['applied'] else 'kept'} ({r['reason']})" for g, r in groups.items())
-              + f", bottom rates: {'applied' if bottoms['applied'] else 'kept'} ({bottoms['reason']})",
-              flush=True)
-    except Exception as e:
+        log(f"done: {len(rows)} rows, oi_days={days}, deriv={deriv_source}, "
+            + ", ".join(f"{g}: {'applied' if r['applied'] else 'kept'} ({r['reason']})" for g, r in groups.items())
+            + f", bottom rates: {'applied' if bottoms['applied'] else 'kept'} ({bottoms['reason']})")
+    except BaseException as e:   # also Stopped (SIGTERM) and Ctrl+C
         db.runs.update_one({"_id": run_id}, {"$set": {"status": "error", "finished_at": now(), "error": str(e)[:500]}})
+        log(f"failed: {str(e)[:300] or type(e).__name__}")
         raise
 
 

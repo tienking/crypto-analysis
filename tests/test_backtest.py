@@ -132,8 +132,10 @@ def test_engine_price_rows_use_the_app_criteria():
     h4 = arrays(1200, 4 * 3_600_000)
     d1 = {k: v[::6] for k, v in h4.items()}                   # same series on 1d (open = first 4h open)
     d1["c"] = h4["c"][5::6]
-    rows = engine.run({"spot": {"BTC": {"4h": h4, "1d": d1}}}, [("price", "BTC", "4h")], workers=1)
-    assert len(rows) > 100
+    seen = []
+    rows = engine.run({"spot": {"BTC": {"4h": h4, "1d": d1}}}, [("price", "BTC", "4h")], workers=1,
+                      progress=lambda done, total: seen.append((done, total)))
+    assert len(rows) > 100 and seen == [(1, 1)]
     r = rows[0]
     assert set(r) >= {"htf", "trend", "structure", "momentum", "volume", "btc", "z"}
     assert r["btc"] is None                                     # analysing BTC itself
@@ -172,3 +174,34 @@ def test_reset_clears_results_but_keeps_the_archive():
     from backtest.reset import clear_scores
     client = {"cryptonews": {"score_history": Col(5), "settings": Col(2)}}
     assert clear_scores(client) == 5 and client["cryptonews"]["settings"].n == 2
+
+
+def test_reweight_closes_runs_left_running():
+    from backtest.reweight import close_stale
+
+    class Runs:
+        def update_many(self, q, u):
+            assert q == {"status": "running"} and u["$set"]["status"] == "error"
+            return type("R", (), {"modified_count": 2})()
+
+    db = type("DB", (), {"runs": Runs()})()
+    assert close_stale(db) == 2
+
+
+def test_reweight_progress_one_line_per_tenth(capsys):
+    from backtest.reweight import every_tenth
+    cb = every_tenth("price criteria")
+    for i in range(1, 92):
+        cb(i, 91)
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert len(lines) == 10 and lines[-1].endswith("price criteria 91/91")
+
+
+def test_reweight_sigterm_raises_stopped_in_the_main_process():
+    import os
+    import signal
+
+    from backtest.reweight import Stopped, on_sigterm
+    with pytest.raises(Stopped):
+        on_sigterm(os.getpid())(signal.SIGTERM, None)
+    assert not issubclass(Stopped, Exception)   # the Bybit/bottoms fallbacks must not catch it

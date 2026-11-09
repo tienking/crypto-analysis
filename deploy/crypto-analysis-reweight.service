@@ -6,11 +6,13 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory=/root/projects/crypto-analysis
 EnvironmentFile=/root/projects/crypto-analysis/.env
-Environment=BACKTEST_WORKERS=2
+# One worker per core: the VPS has 1 vCPU, a second worker only adds memory and switching.
+Environment=BACKTEST_WORKERS=1
 ExecStart=/root/projects/crypto-analysis/crypto-analysis-venv/bin/python -m backtest.reweight
 # Low priority: the other sites on this VPS stay responsive while it runs.
 Nice=19
 CPUWeight=20
 IOSchedulingClass=idle
-# 6h: the first run on a new coin set downloads everything and replays derivatives on Bybit history.
-TimeoutStartSec=6h
+# 12h: on the 1-vCPU VPS a full replay (after a reset or a criterion change) took over 6 h with
+# the web app's score recorder taking its share. Progress lines: journalctl -u crypto-analysis-reweight.
+TimeoutStartSec=12h
