@@ -33,18 +33,18 @@ The analysis UI and the Admin page are in Vietnamese.
 
    | Criterion | Weight | Bullish when |
    |---|---|---|
-   | Higher-timeframe agreement | 5 | EMA trend up on the higher timeframe (5m→30m, 15m→1h, 30m→2h, 1h→4h, 4h→1d, 12h→3d, 1d→1w) |
-   | EMA trend | 17 | Price > EMA50 > EMA200 |
-   | Price structure | 13 | Higher high + higher low, or a break of the last pivot high |
-   | Momentum | 17 | RSI ≥ 50 and rising; MACD histogram positive and widening |
-   | Volume confirmation | 15 | Green-candle volume ≥ 1.2× red over 20 candles |
+   | Higher-timeframe agreement | 12 | EMA trend up on the higher timeframe (5m→30m, 15m→1h, 30m→2h, 1h→4h, 4h→1d, 12h→3d, 1d→1w) |
+   | EMA trend | 19 | Price > EMA20 > EMA50 |
+   | Price structure | 12 | Higher high + higher low, or a break of the last pivot high |
+   | Momentum | 15 | RSI ≥ 50 and rising; MACD histogram positive and widening |
+   | Volume confirmation | 13 | Green-candle volume ≥ 1.2× red over 20 candles |
    | Derivatives | 5 | OI up ≥ 3% with price up and funding ≤ 0.03% (funding ≥ 0.05% is bearish) |
-   | BTC context | 23 | BTC's EMA trend up on the same timeframe (dropped when analysing BTC: its weight is shared pro rata by the other 7, and the table shows those effective weights; a BTC-only fitted set did not beat this on the test half) |
+   | BTC context | 19 | BTC's EMA trend up on the same timeframe (dropped when analysing BTC: its weight is shared pro rata by the other 7, and the table shows those effective weights; a BTC-only fitted set did not beat this on the test half) |
    | Liquidation zones (estimated) | 5 | Shorts waiting above pull harder than longs waiting below (within ±5%) |
 
    **Weights come from a backtest**. Since v2.16.0 it runs on 13 coins (BTC, ETH, BNB, XRP, SOL, TRX, DOGE, ADA, LTC, AVAX, SUI, TAO, DOT;
    not BGB, which is not on Binance, nor HYPE, whose Binance spot history starts Sep 2026 and
-   which trades mostly on Hyperliquid). The code defaults and the tables below are from the first backtest (Nov 2026,
+   which trades mostly on Hyperliquid). The tables below are from the first backtest (Nov 2026,
    10 coins: BTC, ETH, SOL, XRP, LTC, BNB, DOGE, ADA, LINK, AVAX; up to 15,000 candles per timeframe; the app's own criteria code replayed candle by
    candle, with the forming higher-timeframe candle rebuilt so nothing looks ahead). Target:
    the return over the next 5 candles, scaled by recent volatility. Information coefficient
@@ -66,6 +66,15 @@ The analysis UI and the Admin page are in Vietnamese.
    tell), so they keep 5 each. **On 5m–30m no criterion and no weighting predicted the next
    candles**: treat the score there as a description of the current trend, not a forecast
    (the page shows that warning on 5m/15m/30m).
+
+   **EMA20/50 instead of EMA50/200** (v2.21.0). The EMA pair drives three criteria (EMA trend,
+   higher timeframe, BTC context). A backtest on 13 coins (15,000 candles per timeframe) tried
+   9/20, 20/50, 50/200 and 100/200, each with weights fitted on the older half: on 4h–1d, 20/50
+   gave the best newer-half composite IC (+0.0518 vs +0.0481 for 50/200), better on 11 of 13
+   coins and in each third of the history (12h and 1d gain, 4h slightly lower). The default
+   weights above are that fit. The same run found that adding EMA9/20 as an extra criterion
+   (position, gap or a recent cross) adds nothing (≤ +0.0007): it overlaps momentum and
+   structure (correlation 0.6–0.7). The IC table above is from the first backtest (EMA50/200).
 
    **Weights now update themselves weekly** (see *Backtest pipeline* below), separately for
    two groups: **short** = 5m/15m/30m/1h and **long** = 4h/12h/1d. The table above is the
@@ -182,8 +191,10 @@ Guardrails of a weekly update (`backtest/fit.py`):
 first run on a new coin set; a later run then fetches only what is new.
 
 `python -m backtest.reset --yes` deletes `runs`, `weight_sets` and `bottom_rates` (used when the
-coin set changes); the app then uses the code defaults until the next reweight run. The OI
-archive `market_5m`, the download `cache` and the lock are kept.
+coin set or a criterion changes); the app then uses the code defaults until the next reweight
+run. The OI archive `market_5m`, the download `cache` and the lock are kept. Add `--scores` to
+also empty the score history (`cryptonews.score_history`), whose older points were computed
+with the old rules.
 
 Storage: MongoDB database `ca_backtest` (env `BACKTEST_DB`) on the same cluster:
 `market_5m` (one document per coin per UTC day, 288 slots per field, about 105 MB per year
@@ -248,7 +259,7 @@ crypto-analysis/
 │   ├── fit.py               # IC weights + guardrails (split, ±3 step, must beat current)
 │   ├── bottoms.py           # Weekly (from reweight) or manual: measure bottom-signal hit rates → bottom_rates
 │   ├── reweight.py          # Weekly: backtest → propose → apply or keep → record the run
-│   └── reset.py             # Manual: clear runs, weight_sets, bottom_rates (after a coin-set change)
+│   └── reset.py             # Manual: clear runs, weight_sets, bottom_rates (+ score history with --scores)
 ├── tests/                   # pytest, fake Binance + fake AI (no network, no MongoDB)
 ├── requirements.txt / requirements-dev.txt
 ├── .env.example

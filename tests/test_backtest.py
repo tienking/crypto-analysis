@@ -169,3 +169,6 @@ def test_reset_clears_results_but_keeps_the_archive():
     db = {"runs": Col(3), "weight_sets": Col(4), "bottom_rates": Col(2), "market_5m": Col(900), "state": Col(1)}
     assert reset(db) == {"runs": 3, "weight_sets": 4, "bottom_rates": 2}
     assert db["market_5m"].n == 900 and db["state"].n == 1
+    from backtest.reset import clear_scores
+    client = {"cryptonews": {"score_history": Col(5), "settings": Col(2)}}
+    assert clear_scores(client) == 5 and client["cryptonews"]["settings"].n == 2

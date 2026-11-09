@@ -79,7 +79,7 @@ export default function Guide({ onClose }) {
   }, [onClose]);
 
   const T = cfg?.thresholds || {
-    ema_fast: 50, ema_slow: 200, rsi_mid: 50, rsi_overbought: 75, rsi_oversold: 25, vol_lookback: 20, vol_ratio: 1.2,
+    ema_fast: 20, ema_slow: 50, rsi_mid: 50, rsi_overbought: 75, rsi_oversold: 25, vol_lookback: 20, vol_ratio: 1.2,
     oi_change_pct: 3, funding_ok_max: 0.03, funding_hot: 0.05, pivot_window: 3, adx_trend_min: 20, score_strong: 50,
     score_lean: 20, liq_range_pct: 5, liq_imbalance: 0.25,
   };
@@ -120,7 +120,7 @@ export default function Guide({ onClose }) {
           <Indicator name={`EMA (đường trung bình động hàm mũ): ${ef}, ${es}`}
             what={`Giá trung bình của n nến gần nhất, trong đó nến càng gần càng được tính nặng hơn, nên EMA bám giá nhanh hơn trung bình thường. Trang dùng ${ef} (nhanh) và ${es} (chậm).`}
             f={"k = 2 ÷ (n + 1)\nEMA = Đóng × k + EMA nến trước × (1 − k)\nGiá trị đầu tiên = trung bình cộng giá Đóng của n nến đầu"}
-            read={`Giá trên EMA: giá đang ở phía trên đường trung bình. ${ef} nằm trên ${es}: xu hướng gần đây mạnh hơn xu hướng dài hạn, tức xu hướng tăng; ngược lại là xu hướng giảm. ${es} cần đủ ${T.ema_slow} nến mới tính được.`} />
+            read={`Giá trên EMA: giá đang ở phía trên đường trung bình. ${ef} nằm trên ${es}: giá trung bình của các nến gần đây cao hơn của một đoạn dài hơn, tức xu hướng tăng; ngược lại là xu hướng giảm. ${es} cần đủ ${T.ema_slow} nến mới tính được.`} />
           <Indicator name="MA (trung bình đơn giản)"
             what="Trung bình cộng thông thường, mọi nến tính như nhau."
             f={"MA(n) = (giá trị nến 1 + … + giá trị nến n) ÷ n"}

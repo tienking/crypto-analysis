@@ -164,10 +164,10 @@ def test_btc_context_is_dropped_for_btc_and_its_weight_shared(client):
     assert "btc" not in ids and len(ids) == 7
     w = {x["id"]: x["weight"] for x in d["criteria"]}
     assert abs(sum(w.values()) - 100) < 0.5
-    assert w["trend"] == round(17 * 100 / 77, 1)                  # default long weights, btc = 23
-    assert d["weights"]["btc"] == 23                              # the settings keep the nominal set
+    assert w["trend"] == round(19 * 100 / 81, 1)                  # default long weights, btc = 19
+    assert d["weights"]["btc"] == 19                              # the settings keep the nominal set
     sol = client(0.004).post(URL, json={"symbol": "SOL", "timeframe": "4h"}).json()
-    assert len(sol["criteria"]) == 8 and next(x for x in sol["criteria"] if x["id"] == "trend")["weight"] == 17
+    assert len(sol["criteria"]) == 8 and next(x for x in sol["criteria"] if x["id"] == "trend")["weight"] == 19
 
 
 def test_unknown_symbol_404(client):

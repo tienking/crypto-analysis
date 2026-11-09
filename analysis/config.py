@@ -17,8 +17,11 @@ LIQ_PERIOD = {"5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "1h", "1
 
 
 class Thresholds(BaseModel):
-    ema_fast: int = Field(50, ge=5, le=200)
-    ema_slow: int = Field(200, ge=20, le=400)
+    # EMA20/50 (Nov 2026 backtest, 13 coins): on 4h-1d it beat 9/20, 50/200 and 100/200 on the
+    # newer half, on 11/13 coins and in every third of the history. The pair drives the EMA trend,
+    # higher-timeframe and BTC-context criteria.
+    ema_fast: int = Field(20, ge=5, le=200)
+    ema_slow: int = Field(50, ge=20, le=400)
     rsi_mid: float = Field(50, ge=30, le=70, description="RSI above = bullish side")
     rsi_overbought: float = Field(75, ge=55, le=95)
     rsi_oversold: float = Field(25, ge=5, le=45)
@@ -36,20 +39,20 @@ class Thresholds(BaseModel):
 
 
 class Weights(BaseModel):
-    """Backtest-based (Nov 2026: 10 large coins, 7 timeframes, next-5-candle return).
+    """Backtest-based (Nov 2026: 13 large coins, 7 timeframes, next-5-candle return, EMA20/50).
 
     The six price criteria share 90 points in proportion to their information coefficient on
-    4h/12h/1d (fitted on the older half of the data, it beat the old hand-picked weights on
-    the newer half). Derivatives and liquidation only have ~30 days of Binance OI history, too
-    little to measure, so they keep a small weight. Below 1h no criterion showed an edge.
+    4h/12h/1d (fitted on the older half of the data; on the newer half it beat the EMA50/200
+    set, composite IC +0.048 -> +0.052). Derivatives and liquidation keep a small weight; the
+    weekly backtest refits all eight. Below 1h no criterion showed an edge.
     """
-    htf: float = Field(5, ge=0)
-    trend: float = Field(17, ge=0)
-    structure: float = Field(13, ge=0)
-    momentum: float = Field(17, ge=0)
-    volume: float = Field(15, ge=0)
+    htf: float = Field(12, ge=0)
+    trend: float = Field(19, ge=0)
+    structure: float = Field(12, ge=0)
+    momentum: float = Field(15, ge=0)
+    volume: float = Field(13, ge=0)
     derivatives: float = Field(5, ge=0)
-    btc: float = Field(23, ge=0)
+    btc: float = Field(19, ge=0)
     liquidation: float = Field(5, ge=0)
 
 
